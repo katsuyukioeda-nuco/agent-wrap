@@ -1,17 +1,42 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useApp } from '@/hooks/use-app'
+import { api } from '@/lib/api'
 import { appTypeLabels, mcpUrl } from '@/lib/app'
 
 export default function AppHomeScreen() {
   const { detail } = useApp()
   const [copied, setCopied] = useState(false)
+  const [repoDir, setRepoDir] = useState<string | null>(null)
 
   const url = mcpUrl(window.location.origin, detail.app.id)
   const appType = appTypeLabels[detail.app.appType]
+  const webUrl = `${window.location.origin}/${detail.app.id}/`
+
+  useEffect(() => {
+    let cancelled = false
+
+    void api<{ repoDir: string }>('/environment')
+      .then((environment) => {
+        if (!cancelled) {
+          setRepoDir(environment.repoDir)
+        }
+      })
+      .catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const prompt = `このリポジトリで Connected App の Web UI を開発します。
+
+## 前提
+- あなたはこのリポジトリを編集できるコーディングエージェントです。
+- 作業ディレクトリ: ${repoDir ?? '（このリポジトリ）'}
+- Web UI: ${webUrl}
+- ファイル編集と npm コマンドの実行ができる必要があります。
 
 ## このアプリ
 - appId: ${detail.app.id}

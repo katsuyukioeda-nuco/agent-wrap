@@ -10,6 +10,7 @@ app.use(logger())
 
 const api = new Hono()
 api.get('/health', (c) => c.json({ ok: true }))
+api.get('/environment', (c) => c.json({ repoDir: process.cwd() }))
 api.route('/apps', apps)
 api.route('/app-state', appState)
 app.route('/api', api)
