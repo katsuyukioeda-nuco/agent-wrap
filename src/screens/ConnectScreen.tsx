@@ -26,9 +26,7 @@ MCP サーバー: ${url}
 - Codex AppServer が起動している場合は、その WebSocket URL を使ってください。
 - 起動していない場合は Codex AppServer を起動し、その WebSocket URL を使ってください。
 - MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。
-- MCP ツール connect_codex_app_server に、使用する Codex AppServer の URL を渡してください。
-
-接続するとこの画面は自動的に切り替わります。`
+- MCP ツール connect_codex_app_server に、使用する Codex AppServer の URL を渡してください。`
       : `${detail.opencode?.binary ?? 'opencode'} serve --service`
 
   const codeLabel =
