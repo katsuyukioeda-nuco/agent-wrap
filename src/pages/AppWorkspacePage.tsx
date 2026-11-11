@@ -3,12 +3,16 @@ import { Link, NavLink, Outlet, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Bot,
+  Code2,
   LayoutDashboard,
   ListTodo,
   Loader2,
   MessageSquare,
   Plug,
+  Plus,
+  TerminalSquare,
 } from 'lucide-react'
+import type { ConnectedApp } from '../../schema'
 import type { ConnectedAppDetail } from '../../shared/agents'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,6 +30,7 @@ const navItems = [
 export default function AppWorkspacePage() {
   const { appId } = useParams<{ appId: string }>()
   const [detail, setDetail] = useState<ConnectedAppDetail | null>(null)
+  const [apps, setApps] = useState<ConnectedApp[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -35,8 +40,12 @@ export default function AppWorkspacePage() {
     }
 
     try {
-      const next = await api<ConnectedAppDetail>(`/apps/${appId}`)
+      const [next, list] = await Promise.all([
+        api<ConnectedAppDetail>(`/apps/${appId}`),
+        api<ConnectedApp[]>('/apps'),
+      ])
       setDetail(next)
+      setApps(list)
       setError(null)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError))
@@ -78,7 +87,22 @@ export default function AppWorkspacePage() {
 
   return (
     <div className="bg-muted/30 min-h-screen">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl gap-8 px-4 py-6 lg:py-10">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl gap-4 px-4 py-6 lg:gap-6 lg:py-10">
+        <aside className="hidden w-14 shrink-0 flex-col items-center gap-2 lg:flex">
+          {apps.map((app) => (
+            <AppRailIcon key={app.id} app={app} active={app.id === appId} />
+          ))}
+          <div className="bg-border my-1 h-px w-8" />
+          <Link
+            to="/"
+            title="接続先を選ぶ"
+            aria-label="接続先を選ぶ"
+            className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-11 items-center justify-center rounded-xl border border-dashed transition-colors"
+          >
+            <Plus className="size-5" />
+          </Link>
+        </aside>
+
         <aside className="hidden w-56 shrink-0 flex-col lg:flex">
           <Link to="/" className="flex items-center gap-2">
             <Bot className="size-5" />
@@ -135,6 +159,24 @@ export default function AppWorkspacePage() {
               </Link>
               <Badge variant="secondary">{providerLabels[detail.app.provider]}</Badge>
             </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {apps.map((app) => (
+                <AppRailIcon
+                  key={app.id}
+                  app={app}
+                  active={app.id === appId}
+                  compact
+                />
+              ))}
+              <Link
+                to="/"
+                title="接続先を選ぶ"
+                aria-label="接続先を選ぶ"
+                className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-lg border border-dashed transition-colors"
+              >
+                <Plus className="size-4" />
+              </Link>
+            </div>
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold">{detail.app.name}</span>
               <span className="text-muted-foreground font-mono text-[11px]">
@@ -170,5 +212,34 @@ export default function AppWorkspacePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function AppRailIcon({
+  app,
+  active,
+  compact = false,
+}: {
+  app: ConnectedApp
+  active: boolean
+  compact?: boolean
+}) {
+  const Icon = app.provider === 'codex' ? Code2 : TerminalSquare
+
+  return (
+    <Link
+      to={`/${app.id}/`}
+      title={app.name}
+      aria-label={`${app.name} を開く`}
+      className={cn(
+        'flex shrink-0 items-center justify-center border transition-colors',
+        compact ? 'size-8 rounded-lg' : 'size-11 rounded-xl',
+        active
+          ? 'bg-foreground text-background border-foreground'
+          : 'bg-background text-muted-foreground hover:text-foreground hover:border-foreground/40',
+      )}
+    >
+      <Icon className={compact ? 'size-4' : 'size-5'} />
+    </Link>
   )
 }
