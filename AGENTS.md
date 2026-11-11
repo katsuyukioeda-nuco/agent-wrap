@@ -62,6 +62,21 @@ schema.ts                   アプリケーションスキーマ
 - `/{appId}/` — Connected App のトップ画面
 - `/{appId}/mcp` — アプリ専用 MCP エンドポイント
 
+## 空キャンバスのパターン確認
+
+`src/screens/AppHomeScreen.tsx` の空キャンバスはランダム表示です。確認用に `?pattern=<id>` で固定できます。
+
+- `windows`
+- `dashboard`
+- `chat`
+- `orbit`
+- `terminal`
+- `star`
+- `useless`
+- `vacant-lot`
+
+例: `/{appId}/?pattern=vacant-lot`
+
 ## 画面を追加する
 
 1. `src/screens/MyScreen.tsx` を作る
