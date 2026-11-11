@@ -153,7 +153,7 @@ function StarRepo() {
 
       <div className="flex items-end justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-sm font-medium">スターをつけてね</span>
+          <span className="text-base font-bold tracking-tight">Star NOW!!</span>
           <span className="text-muted-foreground text-xs">
             このリポジトリが役に立ったら
           </span>
