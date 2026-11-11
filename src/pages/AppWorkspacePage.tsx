@@ -2,14 +2,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  Check,
   Code2,
+  Copy,
   Loader2,
   Plus,
   TerminalSquare,
 } from 'lucide-react'
 import type { AppType, ConnectedApp } from '../../schema'
 import type { ConnectedAppDetail, ConnectionStatus } from '../../shared/agents'
-import { appTypeLabels } from '@/lib/app'
+import { appTypeLabels, mcpUrl } from '@/lib/app'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -42,6 +44,7 @@ export default function AppWorkspacePage() {
   const [addOpen, setAddOpen] = useState(false)
   const [adding, setAdding] = useState<AppType | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
+  const [copiedMcp, setCopiedMcp] = useState(false)
 
   const load = useCallback(async () => {
     if (!appId) {
@@ -126,6 +129,20 @@ export default function AppWorkspacePage() {
     }
   }
 
+  async function handleCopyMcp(): Promise<void> {
+    if (!appId) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(mcpUrl(window.location.origin, appId))
+      setCopiedMcp(true)
+      window.setTimeout(() => setCopiedMcp(false), 1500)
+    } catch {
+      setCopiedMcp(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -201,6 +218,34 @@ export default function AppWorkspacePage() {
                 <Plus className="size-4" />
               </button>
             </div>
+
+            {connection?.connected && (
+              <div className="mb-4 flex justify-end">
+                <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
+                  <span className="size-2 shrink-0 rounded-full bg-emerald-500" />
+                  <span className="shrink-0 font-medium">MCP</span>
+                  <code
+                    className="max-w-[45vw] truncate font-mono sm:max-w-md"
+                    title={mcpUrl(window.location.origin, appId)}
+                  >
+                    {mcpUrl(window.location.origin, appId)}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 shrink-0"
+                    aria-label="MCP URL をコピー"
+                    onClick={() => void handleCopyMcp()}
+                  >
+                    {copiedMcp ? (
+                      <Check className="size-3.5" />
+                    ) : (
+                      <Copy className="size-3.5" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {connection?.connected ? (
               <Outlet context={{ detail, refresh: load }} />
