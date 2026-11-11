@@ -1,5 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { ConnectedApp, OpencodeConnectedApp } from '../../schema'
 import type {
   AgentTestResult,
@@ -9,6 +12,69 @@ import type {
 import { readServerSentEvents, type ServerSentEvent } from './sse'
 import type { AgentRuntime, ChatInput } from './types'
 import { delay, findFreePort } from './utils'
+
+interface DiscoveredService {
+  url: string
+  password?: string
+  version?: string
+}
+
+function basicAuth(password: string): string {
+  return `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}`
+}
+
+/**
+ * すでに起動している OpenCode の認証済みサービスを探す。
+ * 見つかればそのサーバーに相乗りし、見つからなければ自前で起動する。
+ */
+async function discoverService(): Promise<DiscoveredService | null> {
+  const stateHome = process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state')
+  const candidates = [
+    join(stateHome, 'opencode', 'service.json'),
+    join(homedir(), '.config', 'opencode', 'service.json'),
+  ]
+
+  for (const file of candidates) {
+    try {
+      const info = JSON.parse(await readFile(file, 'utf8')) as {
+        url?: string
+        password?: string
+        version?: string
+      }
+
+      if (!info.url) {
+        continue
+      }
+      if (info.version && !info.version.startsWith('2.')) {
+        continue
+      }
+
+      const headers = info.password
+        ? { Authorization: basicAuth(info.password) }
+        : undefined
+      const response = await fetch(`${info.url}/api/info`, {
+        headers,
+        signal: AbortSignal.timeout(2000),
+      })
+
+      if (!response.ok) {
+        continue
+      }
+
+      const body = (await response.json()) as { version?: string }
+      return {
+        url: info.url.replace(/\/$/, ''),
+        password: info.password,
+        version: body.version ?? info.version,
+      }
+    } catch {
+      // 次の候補を見る。
+    }
+  }
+
+  return null
+}
+
 
 interface OpenCodeInfo {
   version?: string
@@ -50,6 +116,7 @@ export class OpenCodeRuntime implements AgentRuntime {
   private info: OpenCodeInfo | null = null
   private stderr = ''
   private closed = false
+  private managed = false
   private readonly app: ConnectedApp
   private readonly settings: OpencodeConnectedApp
 
@@ -65,7 +132,7 @@ export class OpenCodeRuntime implements AgentRuntime {
     if (this.closed) {
       throw new Error('OpenCode runtime is closed')
     }
-    if (this.child && this.baseUrl) {
+    if (this.baseUrl && this.info) {
       return
     }
     if (!this.startPromise) {
@@ -77,14 +144,25 @@ export class OpenCodeRuntime implements AgentRuntime {
   }
 
   private async start(): Promise<void> {
+    const discovered = await discoverService()
+
+    if (discovered) {
+      this.baseUrl = discovered.url
+      this.authHeader = discovered.password ? basicAuth(discovered.password) : ''
+      this.info = { version: discovered.version }
+      this.managed = false
+      return
+    }
+
     const port =
       this.settings.port > 0 ? this.settings.port : await findFreePort()
     const password = randomBytes(24).toString('base64url')
     const binary = this.settings.binary || 'opencode'
     const baseUrl = `http://127.0.0.1:${port}`
 
+    this.managed = true
     this.baseUrl = baseUrl
-    this.authHeader = `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}`
+    this.authHeader = basicAuth(password)
     this.stderr = ''
 
     const child = spawn(
@@ -480,6 +558,14 @@ export class OpenCodeRuntime implements AgentRuntime {
 
   async close(): Promise<void> {
     this.closed = true
+
+    if (!this.managed) {
+      this.baseUrl = null
+      this.authHeader = ''
+      this.info = null
+      return
+    }
+
     const child = this.child
     if (!child) {
       return

@@ -37,7 +37,6 @@ export function registerAppTools(server: McpServer, detail: ConnectedAppDetail):
               name: detail.app.name,
               provider: detail.app.provider,
               workingDir: detail.app.workingDir,
-              model: detail.app.model,
             },
             null,
             2,

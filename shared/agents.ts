@@ -4,8 +4,7 @@ import type {
   OpencodeConnectedApp,
 } from '../schema'
 
-/** サーバーから Web UI へ流す正規化済みのイベント。 */
-export type AgentStreamEvent =
+/** サーバーから Web UI へ流す正規化済みのイベント。 */export type AgentStreamEvent =
   | { type: 'session'; sessionId: string }
   | { type: 'delta'; text: string }
   | { type: 'reasoning'; text: string }

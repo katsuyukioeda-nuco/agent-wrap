@@ -14,7 +14,6 @@ function signature(detail: ConnectedAppDetail): string {
   return JSON.stringify({
     provider: detail.app.provider,
     workingDir: detail.app.workingDir,
-    model: detail.app.model,
     codex: detail.codex,
     opencode: detail.opencode,
   })

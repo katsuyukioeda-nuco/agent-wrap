@@ -1,6 +1,4 @@
-import { stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { resolve } from 'node:path'
+import { basename } from 'node:path'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
@@ -18,17 +16,6 @@ import {
 const sandboxSchema = z.enum(['read-only', 'workspace-write', 'danger-full-access'])
 const approvalPolicySchema = z.enum(['never', 'on-request', 'untrusted'])
 
-const codexSchema = z.object({
-  binary: z.string().trim().min(1).max(255).default('codex'),
-  sandbox: sandboxSchema.default('workspace-write'),
-  approvalPolicy: approvalPolicySchema.default('never'),
-})
-
-const opencodeSchema = z.object({
-  binary: z.string().trim().min(1).max(255).default('opencode'),
-  port: z.number().int().min(0).max(65535).default(0),
-})
-
 const codexPatchSchema = z.object({
   binary: z.string().trim().min(1).max(255).optional(),
   sandbox: sandboxSchema.optional(),
@@ -40,34 +27,11 @@ const opencodePatchSchema = z.object({
   port: z.number().int().min(0).max(65535).optional(),
 })
 
-const baseSchema = {
-  name: z.string().trim().min(1).max(255),
-  workingDir: z.string().trim().min(1).max(1024),
-  model: z
-    .string()
-    .trim()
-    .max(255)
-    .nullish()
-    .transform((value) => value || null),
-}
-
-const createSchema = z.discriminatedUnion('provider', [
-  z.object({
-    provider: z.literal('codex'),
-    ...baseSchema,
-    codex: codexSchema.optional(),
-  }),
-  z.object({
-    provider: z.literal('opencode'),
-    ...baseSchema,
-    opencode: opencodeSchema.optional(),
-  }),
-])
+const createSchema = z.object({
+  provider: z.enum(['codex', 'opencode']),
+})
 
 const updateSchema = z.object({
-  name: z.string().trim().min(1).max(255).optional(),
-  workingDir: z.string().trim().min(1).max(1024).optional(),
-  model: z.string().trim().max(255).nullable().optional(),
   codex: codexPatchSchema.optional(),
   opencode: opencodePatchSchema.optional(),
 })
@@ -80,20 +44,6 @@ const chatSchema = z.object({
 const interruptSchema = z.object({
   sessionId: z.string().trim().min(1).max(255),
 })
-
-async function normalizeWorkingDir(value: string): Promise<string | null> {
-  const expanded = value.startsWith('~')
-    ? value.replace(/^~/, homedir())
-    : value
-  const absolute = resolve(expanded)
-
-  try {
-    const info = await stat(absolute)
-    return info.isDirectory() ? absolute : null
-  } catch {
-    return null
-  }
-}
 
 function mcpOrigin(): string {
   return (
@@ -116,19 +66,13 @@ apps.post('/', async (c) => {
     return c.json({ error: 'Invalid request body', issues: parsed.error.issues }, 400)
   }
 
-  const workingDir = await normalizeWorkingDir(parsed.data.workingDir)
-  if (!workingDir) {
-    return c.json({ error: 'workingDir must be an existing directory' }, 400)
-  }
-
+  // このリポジトリを clone したディレクトリを、そのまま Connected App の
+  // 作業ディレクトリにする。プロジェクト選択などは利用者が画面を追加して作り込む。
+  const workingDir = process.cwd()
   const detail = await createApp({
-    name: parsed.data.name,
+    name: basename(workingDir) || 'agent-wrap',
     provider: parsed.data.provider,
     workingDir,
-    model: parsed.data.model,
-    ...(parsed.data.provider === 'codex'
-      ? { codex: codexSchema.parse(parsed.data.codex ?? {}) }
-      : { opencode: opencodeSchema.parse(parsed.data.opencode ?? {}) }),
   })
 
   return c.json(detail, 201)
@@ -164,19 +108,7 @@ apps.patch('/:id', async (c) => {
     return c.json({ error: 'This app is configured for OpenCode' }, 400)
   }
 
-  let workingDir: string | undefined
-  if (parsed.data.workingDir) {
-    const normalized = await normalizeWorkingDir(parsed.data.workingDir)
-    if (!normalized) {
-      return c.json({ error: 'workingDir must be an existing directory' }, 400)
-    }
-    workingDir = normalized
-  }
-
   const detail = await updateApp(id, {
-    ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-    ...(workingDir !== undefined ? { workingDir } : {}),
-    ...(parsed.data.model !== undefined ? { model: parsed.data.model } : {}),
     ...(parsed.data.codex ? { codex: parsed.data.codex } : {}),
     ...(parsed.data.opencode ? { opencode: parsed.data.opencode } : {}),
   })

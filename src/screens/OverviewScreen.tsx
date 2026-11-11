@@ -8,7 +8,6 @@ import {
   MessageSquare,
   Plug,
   RefreshCw,
-  Settings,
   Unplug,
 } from 'lucide-react'
 import type { AgentTestResult } from '../../shared/agents'
@@ -117,8 +116,6 @@ export default function OverviewScreen() {
             <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-sm">
               <dt className="text-muted-foreground">Provider</dt>
               <dd>{providerLabels[detail.app.provider]}</dd>
-              <dt className="text-muted-foreground">Model</dt>
-              <dd>{detail.app.model ?? 'デフォルト'}</dd>
               {detail.codex && (
                 <>
                   <dt className="text-muted-foreground">Binary</dt>
@@ -202,7 +199,7 @@ export default function OverviewScreen() {
         </Card>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <QuickLink
           to={`${base}/chat`}
           icon={<MessageSquare className="size-4" />}
@@ -214,12 +211,6 @@ export default function OverviewScreen() {
           icon={<ListTodo className="size-4" />}
           title="Todo Demo"
           description="DB / API / UI の CRUD サンプル"
-        />
-        <QuickLink
-          to={`${base}/settings`}
-          icon={<Settings className="size-4" />}
-          title="設定"
-          description="接続先や作業ディレクトリを編集"
         />
       </div>
 

@@ -8,7 +8,6 @@ import {
   Loader2,
   MessageSquare,
   Plug,
-  Settings,
 } from 'lucide-react'
 import type { ConnectedAppDetail } from '../../shared/agents'
 import { Badge } from '@/components/ui/badge'
@@ -18,11 +17,10 @@ import { providerLabels } from '@/lib/app'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { to: '', label: '概要', icon: LayoutDashboard, end: true },
+  { to: '', label: 'トップ', icon: LayoutDashboard, end: true },
   { to: 'chat', label: 'Chat', icon: MessageSquare },
   { to: 'mcp-servers', label: 'MCP', icon: Plug },
   { to: 'todos', label: 'Todo Demo', icon: ListTodo },
-  { to: 'settings', label: '設定', icon: Settings },
 ]
 
 export default function AppWorkspacePage() {

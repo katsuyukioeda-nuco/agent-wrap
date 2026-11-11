@@ -14,7 +14,6 @@ interface AppRow extends RowDataPacket {
   name: string
   provider: AgentProvider
   workingDir: string
-  model: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -39,7 +38,7 @@ interface OpencodeRow extends RowDataPacket {
 }
 
 const selectApp = `
-  SELECT id, name, provider, working_dir AS workingDir, model,
+  SELECT id, name, provider, working_dir AS workingDir,
          created_at AS createdAt, updated_at AS updatedAt
   FROM connected_apps
 `
@@ -63,7 +62,6 @@ function toApp(row: AppRow): ConnectedApp {
     name: row.name,
     provider: row.provider,
     workingDir: row.workingDir,
-    model: row.model,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -96,7 +94,6 @@ export interface CreateAppInput {
   name: string
   provider: AgentProvider
   workingDir: string
-  model: string | null
   codex?: {
     binary: string
     sandbox: CodexConnectedApp['sandbox']
@@ -111,7 +108,6 @@ export interface CreateAppInput {
 export interface UpdateAppInput {
   name?: string
   workingDir?: string
-  model?: string | null
   codex?: Partial<
     Pick<CodexConnectedApp, 'binary' | 'sandbox' | 'approvalPolicy'>
   >
@@ -166,9 +162,9 @@ export async function createApp(input: CreateAppInput): Promise<ConnectedAppDeta
 
     await connection.execute(
       `INSERT INTO connected_apps
-         (id, name, provider, working_dir, model, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, input.name, input.provider, input.workingDir, input.model, now, now],
+         (id, name, provider, working_dir, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, input.name, input.provider, input.workingDir, now, now],
     )
 
     if (input.provider === 'codex') {
@@ -227,15 +223,9 @@ export async function updateApp(
 
     await connection.execute(
       `UPDATE connected_apps
-       SET name = ?, working_dir = ?, model = ?, updated_at = ?
+       SET name = ?, working_dir = ?, updated_at = ?
        WHERE id = ?`,
-      [
-        input.name ?? current.app.name,
-        input.workingDir ?? current.app.workingDir,
-        input.model === undefined ? current.app.model : input.model,
-        now,
-        id,
-      ],
+      [input.name ?? current.app.name, input.workingDir ?? current.app.workingDir, now, id],
     )
 
     if (current.app.provider === 'codex') {

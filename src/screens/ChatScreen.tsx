@@ -342,7 +342,7 @@ export default function ChatScreen() {
         />
         <div className="mt-1 flex items-center justify-between gap-3">
           <p className="text-muted-foreground text-xs">
-            モデル: {detail.app.model ?? 'デフォルト'}
+            {providerLabels[detail.app.provider]} に接続しています
           </p>
           <div className="flex items-center gap-2">
             {streaming && (

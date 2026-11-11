@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   Bot,
   Code2,
-  ListTodo,
+  Loader2,
   MessageSquare,
   Plug,
   Plus,
   TerminalSquare,
+  Trash2,
 } from 'lucide-react'
 import type { AgentProvider, ConnectedApp } from '../../schema'
+import type { ConnectedAppDetail } from '../../shared/agents'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,23 +30,20 @@ const providerCards: Array<{
   icon: typeof Code2
   title: string
   description: string
-  points: string[]
 }> = [
   {
     provider: 'codex',
     icon: Code2,
     title: 'Codex',
     description:
-      'codex app-server を JSON-RPC (stdio) で起動して接続します。Codex のスレッドとターンをそのまま Web UI に載せられます。',
-    points: ['codex app-server を自動起動', 'sandbox / approval policy を設定', 'スレッドを継続'],
+      'codex app-server に接続します。Codex の認証・スレッドをそのまま使えます。',
   },
   {
     provider: 'opencode',
     icon: TerminalSquare,
     title: 'OpenCode',
     description:
-      'opencode serve をローカルで起動し、HTTP API と SSE で接続します。既存のセッションや MCP 設定を利用できます。',
-    points: ['opencode serve を自動起動', 'HTTP API + SSE', 'MCP サーバー状態を表示'],
+      '起動中の認証済み OpenCode サーバーに接続します。見つからなければ自動で起動します。',
   },
 ]
 
@@ -56,8 +55,10 @@ function formatDate(value: string): string {
 }
 
 export default function AppsPage() {
+  const navigate = useNavigate()
   const [apps, setApps] = useState<ConnectedApp[]>([])
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState<AgentProvider | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -87,6 +88,41 @@ export default function AppsPage() {
     }
   }, [])
 
+  async function handleCreate(provider: AgentProvider): Promise<void> {
+    setCreating(provider)
+    setError(null)
+
+    try {
+      const detail = await api<ConnectedAppDetail>('/apps', {
+        method: 'POST',
+        body: JSON.stringify({ provider }),
+      })
+      navigate(`/${detail.app.id}/`)
+    } catch (createError) {
+      setError(
+        createError instanceof Error ? createError.message : String(createError),
+      )
+    } finally {
+      setCreating(null)
+    }
+  }
+
+  async function handleDelete(app: ConnectedApp): Promise<void> {
+    const confirmed = window.confirm(`「${app.name}」を削除しますか？`)
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await api<void>(`/apps/${app.id}`, { method: 'DELETE' })
+      setApps((current) => current.filter((item) => item.id !== app.id))
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error ? deleteError.message : String(deleteError),
+      )
+    }
+  }
+
   return (
     <div className="bg-muted/30 min-h-screen">
       <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-10 sm:py-14">
@@ -95,12 +131,6 @@ export default function AppsPage() {
             <Bot className="size-6" />
             <span className="text-lg font-semibold tracking-tight">agent-wrap</span>
           </Link>
-          <Button asChild variant="outline">
-            <Link to="/new">
-              <Plus />
-              新しいアプリ
-            </Link>
-          </Button>
         </header>
 
         <section className="mt-16 max-w-2xl">
@@ -111,54 +141,54 @@ export default function AppsPage() {
             あなたの画面を。
           </h1>
           <p className="text-muted-foreground mt-5 text-base leading-relaxed">
-            Codex または OpenCode を選んで Connected App を作成すると、
-            そのアプリ専用の URL・MCP エンドポイント・Web UI が立ち上がります。
-            画面はこのリポジトリに追加していくだけです。
+            Codex または OpenCode を選ぶと、このリポジトリを作業ディレクトリとして
+            Connected App が作成されます。あとはソースを直接編集して、自分だけの
+            画面と MCP ツールを作り込むだけです。
           </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <Button asChild size="lg">
-              <Link to="/new">
-                Connected App を作成
-                <ArrowRight />
-              </Link>
-            </Button>
-            {apps.length > 0 && (
-              <Button asChild size="lg" variant="outline">
-                <Link to={`/${apps[0].id}/`}>最新のアプリを開く</Link>
-              </Button>
-            )}
-          </div>
         </section>
 
-        <section className="mt-16 grid gap-4 sm:grid-cols-2">
-          {providerCards.map((card) => {
-            const Icon = card.icon
-            return (
-              <Link key={card.provider} to={`/new?provider=${card.provider}`}>
-                <Card className="hover:border-foreground/30 h-full transition-colors">
-                  <CardHeader>
-                    <div className="bg-secondary flex size-10 items-center justify-center rounded-lg">
-                      <Icon className="size-5" />
-                    </div>
-                    <CardTitle className="mt-2">{card.title}</CardTitle>
-                    <CardDescription className="leading-relaxed">
-                      {card.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="text-muted-foreground flex flex-col gap-1.5 text-sm">
-                      {card.points.map((point) => (
-                        <li key={point} className="flex items-center gap-2">
-                          <span className="bg-foreground/40 size-1.5 rounded-full" />
-                          {point}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              </Link>
-            )
-          })}
+        <section className="mt-12">
+          <h2 className="text-xl font-semibold tracking-tight">アプリを追加</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            接続するアプリを選んでください。認証や作業ディレクトリの設定は不要です。
+          </p>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {providerCards.map((card) => {
+              const Icon = card.icon
+              const isCreating = creating === card.provider
+              return (
+                <button
+                  key={card.provider}
+                  type="button"
+                  onClick={() => void handleCreate(card.provider)}
+                  disabled={creating !== null}
+                  className="text-left disabled:cursor-wait"
+                >
+                  <Card className="hover:border-foreground/30 h-full transition-colors">
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="bg-secondary flex size-10 items-center justify-center rounded-lg">
+                          <Icon className="size-5" />
+                        </div>
+                        {isCreating ? (
+                          <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                        ) : (
+                          <Plus className="text-muted-foreground size-4" />
+                        )}
+                      </div>
+                      <CardTitle className="mt-2">{card.title}</CardTitle>
+                      <CardDescription className="leading-relaxed">
+                        {card.description}
+                      </CardDescription>
+                    </CardHeader>
+                  </Card>
+                </button>
+              )
+            })}
+          </div>
+
+          {error && <p className="text-destructive mt-4 text-sm">{error}</p>}
         </section>
 
         <section className="mt-16">
@@ -173,42 +203,38 @@ export default function AppsPage() {
 
           {loading ? (
             <p className="text-muted-foreground mt-4 text-sm">読み込み中…</p>
-          ) : error ? (
-            <p className="text-destructive mt-4 text-sm">{error}</p>
           ) : apps.length === 0 ? (
             <Card className="mt-4 border-dashed">
               <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
                 <Plug className="text-muted-foreground size-6" />
                 <p className="font-medium">まだ Connected App がありません</p>
                 <p className="text-muted-foreground max-w-md text-sm">
-                  Codex / OpenCode を選んで最初のアプリを作成してください。
-                  作成後にアプリ専用の URL と MCP エンドポイントが発行されます。
+                  上の Codex / OpenCode から追加してください。作成後すぐに
+                  アプリ専用のトップページが開きます。
                 </p>
-                <Button asChild className="mt-1">
-                  <Link to="/new">作成する</Link>
-                </Button>
               </CardContent>
             </Card>
           ) : (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               {apps.map((app) => (
-                <Link key={app.id} to={`/${app.id}/`} className="group">
-                  <Card className="group-hover:border-foreground/30 h-full transition-colors">
+                <Card key={app.id} className="group relative h-full">
+                  <Link to={`/${app.id}/`} className="block h-full">
                     <CardHeader>
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-3 pr-10">
                         <CardTitle className="break-words">{app.name}</CardTitle>
-                        <Badge variant="secondary">{providerLabels[app.provider]}</Badge>
+                        <ArrowRight className="text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
                       </div>
                       <CardDescription className="font-mono text-xs break-all">
                         {app.workingDir}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="text-muted-foreground flex flex-col gap-2 text-xs">
-                      <div className="flex items-center justify-between gap-3">
-                        <span>{app.model ?? 'デフォルトモデル'}</span>
-                        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">
+                          {providerLabels[app.provider]}
+                        </Badge>
+                        <span>作成: {formatDate(app.createdAt)}</span>
                       </div>
-                      <span>作成: {formatDate(app.createdAt)}</span>
                       <div className="flex items-center gap-3 pt-1">
                         <span className="flex items-center gap-1">
                           <MessageSquare className="size-3.5" />
@@ -219,13 +245,22 @@ export default function AppsPage() {
                           MCP
                         </span>
                         <span className="flex items-center gap-1">
-                          <ListTodo className="size-3.5" />
-                          Demo
+                          <ArrowRight className="size-3.5" />
+                          トップページ
                         </span>
                       </div>
                     </CardContent>
-                  </Card>
-                </Link>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`${app.name} を削除`}
+                    className="text-muted-foreground hover:text-destructive absolute top-3 right-3"
+                    onClick={() => void handleDelete(app)}
+                  >
+                    <Trash2 />
+                  </Button>
+                </Card>
               ))}
             </div>
           )}

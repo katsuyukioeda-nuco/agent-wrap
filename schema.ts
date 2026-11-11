@@ -40,7 +40,6 @@ export interface ConnectedApp {
   name: string
   provider: AgentProvider
   workingDir: string
-  model: string | null
   createdAt: string // ISO8601
   updatedAt: string // ISO8601
 }

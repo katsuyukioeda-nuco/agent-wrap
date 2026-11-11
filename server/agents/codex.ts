@@ -439,7 +439,6 @@ export class CodexRuntime implements AgentRuntime {
         cwd: this.app.workingDir,
         sandbox: this.connection.sandbox,
         approvalPolicy: this.connection.approvalPolicy,
-        ...(this.app.model ? { model: this.app.model } : {}),
       })
       await onEvent({ type: 'session', sessionId: threadId })
     } else {
@@ -448,7 +447,6 @@ export class CodexRuntime implements AgentRuntime {
         sandbox: this.connection.sandbox,
         approvalPolicy: this.connection.approvalPolicy,
         ephemeral: false,
-        ...(this.app.model ? { model: this.app.model } : {}),
       })
       threadId = result.thread?.id
       if (!threadId) {
