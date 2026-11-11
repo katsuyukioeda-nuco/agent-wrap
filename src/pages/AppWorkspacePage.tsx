@@ -219,33 +219,36 @@ export default function AppWorkspacePage() {
               </button>
             </div>
 
-            {connection?.connected && (
-              <div className="mb-4 flex justify-end">
-                <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
-                  <span className="size-2 shrink-0 rounded-full bg-emerald-500" />
-                  <span className="shrink-0 font-medium">MCP</span>
-                  <code
-                    className="max-w-[45vw] truncate font-mono sm:max-w-md"
-                    title={mcpUrl(window.location.origin, appId)}
-                  >
-                    {mcpUrl(window.location.origin, appId)}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 shrink-0"
-                    aria-label="MCP URL をコピー"
-                    onClick={() => void handleCopyMcp()}
-                  >
-                    {copiedMcp ? (
-                      <Check className="size-3.5" />
-                    ) : (
-                      <Copy className="size-3.5" />
-                    )}
-                  </Button>
-                </div>
+            <div className="mb-4 flex justify-end">
+              <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
+                <span
+                  className={cn(
+                    'size-2 shrink-0 rounded-full',
+                    connection?.connected ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                  )}
+                />
+                <span className="shrink-0 font-medium">MCP</span>
+                <code
+                  className="max-w-[45vw] truncate font-mono sm:max-w-md"
+                  title={mcpUrl(window.location.origin, appId)}
+                >
+                  {mcpUrl(window.location.origin, appId)}
+                </code>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 shrink-0"
+                  aria-label="MCP URL をコピー"
+                  onClick={() => void handleCopyMcp()}
+                >
+                  {copiedMcp ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                </Button>
               </div>
-            )}
+            </div>
 
             {connection?.connected ? (
               <Outlet context={{ detail, refresh: load }} />

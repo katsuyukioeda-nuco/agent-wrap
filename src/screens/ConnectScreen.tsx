@@ -1,11 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import {
-  Check,
-  Code2,
-  Copy,
-  Loader2,
-  TerminalSquare,
-} from 'lucide-react'
+import { Check, Copy, Loader2 } from 'lucide-react'
 import type { ConnectedAppDetail } from '../../shared/agents'
 import { Button } from '@/components/ui/button'
 import { appTypeLabels, mcpUrl } from '@/lib/app'
@@ -18,12 +12,10 @@ export default function ConnectScreen({
 }: {
   detail: ConnectedAppDetail
 }) {
-  const [actionCopied, setActionCopied] = useState(false)
-  const [urlCopied, setUrlCopied] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const url = mcpUrl(window.location.origin, detail.app.id)
   const appTypeLabel = appTypeLabels[detail.app.appType]
-  const Icon = detail.app.appType === 'codex' ? Code2 : TerminalSquare
 
   const prompt =
     detail.app.appType === 'codex'
@@ -37,137 +29,59 @@ MCP サーバー: ${url}
 - MCP ツール connect_codex_app_server に、使用する Codex AppServer の URL を渡してください。
 
 接続するとこの画面は自動的に切り替わります。`
-      : `OpenCode を起動してください。
-
-OpenCode アプリを起動するか、次のコマンドでサーバーを起動します。
-
-${detail.opencode?.binary ?? 'opencode'} serve --service
-
-起動すると自動的に接続されます。`
-
-  const actionText =
-    detail.app.appType === 'codex'
-      ? prompt
       : `${detail.opencode?.binary ?? 'opencode'} serve --service`
 
-  const actionLabel =
+  const codeLabel =
+    detail.app.appType === 'codex' ? 'プロンプト' : 'コマンド'
+  const stepTitle =
     detail.app.appType === 'codex'
-      ? 'プロンプトをコピー'
-      : '起動コマンドをコピー'
+      ? '以下のプロンプトをCodexに貼り付けます'
+      : '以下のコマンドでOpenCodeを起動します'
 
-  async function handleCopyAction(): Promise<void> {
+  async function handleCopy(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(actionText)
-      setActionCopied(true)
+      await navigator.clipboard.writeText(prompt)
+      setCopied(true)
     } catch {
-      setActionCopied(false)
+      setCopied(false)
     }
   }
-
-  async function handleCopyUrl(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(url)
-      setUrlCopied(true)
-      window.setTimeout(() => setUrlCopied(false), 1500)
-    } catch {
-      setUrlCopied(false)
-    }
-  }
-
-  const stepOneState: StepState = actionCopied ? 'done' : 'active'
-  const stepTwoState: StepState = actionCopied ? 'active' : 'pending'
 
   return (
-    <div className="mx-auto w-full max-w-lg py-10">
-      <div className="flex flex-col items-center text-center">
-        <div className="bg-secondary flex size-14 items-center justify-center rounded-2xl">
-          <Icon className="size-7" />
-        </div>
-        <h1 className="mt-4 text-2xl font-bold tracking-tight">
-          {appTypeLabel} に接続
-        </h1>
-      </div>
+    <div className="mx-auto w-full max-w-2xl py-10">
+      <h1 className="text-lg font-semibold tracking-tight">
+        以下の手順で{appTypeLabel}に接続します。
+      </h1>
 
-      <div className="mt-10">
+      <div className="mt-6">
         <Step
           index={1}
-          total={detail.app.appType === 'codex' ? 3 : 2}
-          title="コピー"
-          state={stepOneState}
+          total={2}
+          title={stepTitle}
+          state={copied ? 'done' : 'active'}
         >
-          {actionCopied ? (
-            <div className="text-muted-foreground flex items-center gap-2 text-sm">
-              <Check className="size-4 text-emerald-600" />
-              コピー済み
-              <Button variant="link" size="sm" onClick={() => void handleCopyAction()}>
-                もう一度コピー
+          <div className="bg-muted mt-3 overflow-hidden rounded-md border">
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <span className="text-xs font-medium">{codeLabel}</span>
+              <Button variant="ghost" size="sm" onClick={() => void handleCopy()}>
+                {copied ? <Check /> : <Copy />}
+                {copied ? 'コピーしました' : 'コピー'}
               </Button>
             </div>
-          ) : (
-            <Button size="lg" onClick={() => void handleCopyAction()}>
-              <Copy />
-              {actionLabel}
-            </Button>
-          )}
+            <pre className="max-h-56 overflow-auto p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+              {prompt}
+            </pre>
+          </div>
         </Step>
 
-        {detail.app.appType === 'codex' ? (
-          <>
-            <Step
-              index={2}
-              total={3}
-              title="Codex に貼り付ける"
-              state={stepTwoState}
-            />
-            <Step
-              index={3}
-              total={3}
-              title="接続を待つ"
-              state={actionCopied ? 'active' : 'pending'}
-            >
-              {actionCopied && <Waiting />}
-            </Step>
-          </>
-        ) : (
-          <Step
-            index={2}
-            total={2}
-            title="接続を待つ"
-            state={stepTwoState}
-          >
-            {actionCopied && <Waiting />}
-          </Step>
-        )}
-      </div>
-
-      <div className="border-border mt-8 flex flex-col gap-2 border-t pt-4">
-        <details>
-          <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs select-none">
-            プロンプトの中身を見る
-          </summary>
-          <pre className="bg-muted mt-2 rounded-md p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-            {prompt}
-          </pre>
-        </details>
-
-        <details>
-          <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs select-none">
-            MCP URL を見る
-          </summary>
-          <div className="bg-muted mt-2 flex items-center gap-2 rounded-md p-2">
-            <code className="min-w-0 flex-1 px-1 font-mono text-xs break-all">
-              {url}
-            </code>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="MCP URL をコピー"
-              onClick={() => void handleCopyUrl()}
-            >
-              {urlCopied ? <Check /> : <Copy />}
-            </Button>
-          </div>
-        </details>
+        <Step
+          index={2}
+          total={2}
+          title="接続を待つ"
+          state={copied ? 'active' : 'pending'}
+        >
+          {copied && <Waiting />}
+        </Step>
       </div>
     </div>
   )
