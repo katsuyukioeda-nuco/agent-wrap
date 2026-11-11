@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Code2, Loader2, TerminalSquare } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import type { AppState, AppType, ConnectedApp } from '../../schema'
 import type { ConnectedAppDetail } from '../../shared/agents'
+import { AppTypeLogo } from '@/components/app-type-logo'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const choices: Array<{
   appType: AppType
   label: string
-  icon: typeof Code2
 }> = [
-  { appType: 'codex', label: 'Codex', icon: Code2 },
-  { appType: 'opencode', label: 'OpenCode', icon: TerminalSquare },
+  { appType: 'codex', label: 'Codex' },
+  { appType: 'opencode', label: 'OpenCode' },
 ]
 
 export default function AppsPage() {
@@ -101,7 +101,6 @@ export default function AppsPage() {
 
         <div className="grid w-full grid-cols-2 gap-4">
           {choices.map((choice) => {
-            const Icon = choice.icon
             const isConnecting = connecting === choice.appType
 
             return (
@@ -119,7 +118,10 @@ export default function AppsPage() {
                 {isConnecting ? (
                   <Loader2 className="text-muted-foreground size-7 animate-spin" />
                 ) : (
-                  <Icon className="size-7 transition-transform group-hover:scale-105" />
+                  <AppTypeLogo
+                    appType={choice.appType}
+                    className="h-10 transition-transform group-hover:scale-105"
+                  />
                 )}
                 <span className="text-lg font-medium">{choice.label}</span>
               </button>

@@ -3,14 +3,13 @@ import { Link, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
-  Code2,
   Copy,
   Loader2,
   Plus,
-  TerminalSquare,
 } from 'lucide-react'
 import type { AppType, ConnectedApp } from '../../schema'
 import type { ConnectedAppDetail, ConnectionStatus } from '../../shared/agents'
+import { AppTypeLogo } from '@/components/app-type-logo'
 import { appTypeLabels, mcpUrl } from '@/lib/app'
 import { Button } from '@/components/ui/button'
 import {
@@ -27,10 +26,9 @@ import ConnectScreen from '@/screens/ConnectScreen'
 const addChoices: Array<{
   appType: AppType
   label: string
-  icon: typeof Code2
 }> = [
-  { appType: 'codex', label: 'Codex', icon: Code2 },
-  { appType: 'opencode', label: 'OpenCode', icon: TerminalSquare },
+  { appType: 'codex', label: 'Codex' },
+  { appType: 'opencode', label: 'OpenCode' },
 ]
 
 export default function AppWorkspacePage() {
@@ -267,7 +265,6 @@ export default function AppWorkspacePage() {
 
         <div className="grid grid-cols-2 gap-3">
           {addChoices.map((choice) => {
-            const Icon = choice.icon
             const isAdding = adding === choice.appType
 
             return (
@@ -285,7 +282,10 @@ export default function AppWorkspacePage() {
                 {isAdding ? (
                   <Loader2 className="text-muted-foreground size-6 animate-spin" />
                 ) : (
-                  <Icon className="size-6" />
+                  <AppTypeLogo
+                    appType={choice.appType}
+                    className="h-8"
+                  />
                 )}
                 <span className="font-medium">{choice.label}</span>
               </button>
@@ -308,7 +308,6 @@ function AppRailIcon({
   active: boolean
   compact?: boolean
 }) {
-  const Icon = app.appType === 'codex' ? Code2 : TerminalSquare
   const title = `${appTypeLabels[app.appType]} ${app.id.slice(0, 8)}`
 
   return (
@@ -324,7 +323,11 @@ function AppRailIcon({
           : 'bg-background text-muted-foreground hover:text-foreground hover:border-foreground/40',
       )}
     >
-      <Icon className={compact ? 'size-4' : 'size-5'} />
+      <AppTypeLogo
+        appType={app.appType}
+        inverted={active}
+        className={compact ? 'h-4' : 'h-6'}
+      />
     </Link>
   )
 }

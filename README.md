@@ -183,6 +183,10 @@ export interface CodexConnectedApp {
 
 MySQL の `BINARY` は予約語のため、DB カラムは `binary_path` にしています。API / schema 上は `binary` です。
 
+## ロゴ
+
+Codex（OpenAI）と OpenCode のロゴは、各公式ブランドページから取得した公式アセットを使用しています。出典と注意事項は `src/assets/logos/README.md` を参照してください。
+
 ## 開発時の挙動
 
 - フロントエンドは Vite の HMR
