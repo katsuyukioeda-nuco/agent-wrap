@@ -9,6 +9,7 @@ const patterns = [
   TerminalSkeleton,
   StarRepo,
   UselessArea,
+  VacantLot,
 ]
 
 export default function AppHomeScreen() {
@@ -132,6 +133,28 @@ function TerminalSkeleton() {
         <div className="h-1.5 w-1/2 rounded-full bg-white/20" />
         <div className="h-1.5 w-2/3 rounded-full bg-white/20" />
         <div className="mt-1 h-1.5 w-1/4 animate-pulse rounded-full bg-white/60" />
+      </div>
+    </div>
+  )
+}
+
+function VacantLot() {
+  return (
+    <div className="relative flex flex-col items-center">
+      <div className="bg-background relative -rotate-1 rounded-sm border-2 border-foreground px-9 py-5 text-center shadow-md">
+        <p className="text-3xl font-bold tracking-[0.2em]">空き地</p>
+        <p className="mt-1 text-sm font-medium tracking-[0.18em]">購入者募集</p>
+        <p className="border-border text-muted-foreground mt-3 border-t pt-2 text-[10px] tracking-wider">
+          用途: 自由
+        </p>
+      </div>
+
+      <div className="bg-foreground/70 h-16 w-1.5" />
+      <div className="border-border w-48 border-t border-dashed" />
+
+      <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-14">
+        <span className="bg-muted-foreground/40 h-3 w-px rotate-12" />
+        <span className="bg-muted-foreground/40 h-2 w-px -rotate-12" />
       </div>
     </div>
   )
