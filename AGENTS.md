@@ -73,9 +73,8 @@ schema.ts                   アプリケーションスキーマ
 - `terminal`
 - `star`
 - `useless`
-- `vacant-lot`
 
-例: `/{appId}/?pattern=vacant-lot`
+例: `/{appId}/?pattern=star`
 
 ## 画面を追加する
 

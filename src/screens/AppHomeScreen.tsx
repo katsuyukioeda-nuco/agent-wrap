@@ -10,7 +10,6 @@ const patterns = [
   { id: 'terminal', Component: TerminalSkeleton },
   { id: 'star', Component: StarRepo },
   { id: 'useless', Component: UselessArea },
-  { id: 'vacant-lot', Component: VacantLot },
 ]
 
 export default function AppHomeScreen() {
@@ -142,75 +141,6 @@ function TerminalSkeleton() {
         <div className="h-1.5 w-2/3 rounded-full bg-white/20" />
         <div className="mt-1 h-1.5 w-1/4 animate-pulse rounded-full bg-white/60" />
       </div>
-    </div>
-  )
-}
-
-const VACANT_SIGN_WIDTH = 288
-
-const VACANT_SHADOW = (() => {
-  const angle = (55 * Math.PI) / 180
-  const near = {
-    x: Math.cos(angle) * 52,
-    y: Math.sin(angle) * 52,
-  }
-
-  const widthAngle = (7 * Math.PI) / 180
-  const width = VACANT_SIGN_WIDTH * 0.75
-  const w = {
-    x: Math.cos(widthAngle) * width,
-    y: Math.sin(widthAngle) * width,
-  }
-
-  const depth = {
-    x: Math.cos(angle) * 56,
-    y: Math.sin(angle) * 56,
-  }
-
-  const points = [
-    near,
-    { x: near.x + w.x, y: near.y + w.y },
-    { x: near.x + w.x + depth.x, y: near.y + w.y + depth.y },
-    { x: near.x + depth.x, y: near.y + depth.y },
-  ]
-    .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
-    .join(' ')
-
-  return { near, points }
-})()
-
-function VacantLot() {
-  return (
-    <div className="flex scale-75 flex-col items-center sm:scale-100">
-      <div className="bg-background relative w-72 -rotate-1 rounded-sm border-2 border-foreground px-6 py-5 text-center">
-        <p className="text-3xl font-bold tracking-[0.14em]">VACANT LOT</p>
-        <p className="mt-1 text-sm font-semibold tracking-[0.24em]">FOR SALE</p>
-        <p className="border-border text-muted-foreground mt-3 border-t pt-2 text-[10px] tracking-[0.18em]">
-          USE: ANY
-        </p>
-      </div>
-
-      <div className="bg-foreground/70 h-16 w-1.5" />
-
-      <svg
-        aria-hidden="true"
-        className="text-foreground/10 pointer-events-none absolute top-full left-1/2"
-        width="290"
-        height="120"
-        viewBox="0 0 290 120"
-        fill="none"
-      >
-        <line
-          x1="0"
-          y1="0"
-          x2={VACANT_SHADOW.near.x}
-          y2={VACANT_SHADOW.near.y}
-          stroke="currentColor"
-          strokeWidth="6"
-          strokeLinecap="butt"
-        />
-        <polygon points={VACANT_SHADOW.points} fill="currentColor" />
-      </svg>
     </div>
   )
 }
