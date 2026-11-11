@@ -19,5 +19,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "server", "scripts", "schema.ts", "vite.config.ts"]
+  "include": ["src", "server", "shared", "scripts", "schema.ts", "vite.config.ts"]
 }

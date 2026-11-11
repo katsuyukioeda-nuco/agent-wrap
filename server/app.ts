@@ -1,6 +1,7 @@
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
+import { apps } from './routes/apps'
 import { todos } from './routes/todos'
 import { users } from './routes/users'
 
@@ -10,6 +11,14 @@ app.use(logger())
 
 const api = new Hono()
 api.get('/health', (c) => c.json({ ok: true }))
+api.get('/config', (c) =>
+  c.json({
+    workingDir: process.cwd(),
+    mcpOrigin:
+      process.env.MCP_PUBLIC_ORIGIN ?? `http://localhost:${process.env.PORT ?? 3000}`,
+  }),
+)
+api.route('/apps', apps)
 api.route('/todos', todos)
 api.route('/users', users)
 app.route('/api', api)

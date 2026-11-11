@@ -1,50 +1,66 @@
 import 'dotenv/config'
 import { createServer } from 'node:http'
-import { getRequestListener, serve } from '@hono/node-server'
+import { getRequestListener } from '@hono/node-server'
 import app from './app'
+import { stopAllRuntimes } from './agents/manager'
+import { closeAllMcpSessions, handleMcpRequest, isMcpPath } from './mcp/handler'
 
 const port = Number(process.env.PORT ?? 3000)
+const host = process.env.HOST ?? '127.0.0.1'
 
-if (process.env.NODE_ENV === 'production') {
-  const server = serve({ fetch: app.fetch, port }, (info) => {
-    console.log(`Server listening on http://localhost:${info.port}`)
-  })
+const hono = getRequestListener(app.fetch)
+const server = createServer()
 
-  const shutdown = () => server.close(() => process.exit(0))
-  process.on('SIGINT', shutdown)
-  process.on('SIGTERM', shutdown)
-} else {
+async function shutdown(): Promise<void> {
+  await Promise.allSettled([stopAllRuntimes(), closeAllMcpSessions()])
+  server.close(() => process.exit(0))
+}
+
+server.on('request', (req, res) => {
+  if (isMcpPath(req.url)) {
+    void handleMcpRequest(req, res)
+    return
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    hono(req, res)
+    return
+  }
+
   // 開発時は Hono と Vite を同じ HTTP サーバーで動かす。
   // Vite は middleware mode で HMR を提供し、/api 以外は Vite が処理する。
-  const { createServer: createViteServer } = await import('vite')
-  const server = createServer()
-  const vite = await createViteServer({
-    server: { middlewareMode: true, hmr: { server } },
-    appType: 'spa',
-  })
-
-  const hono = getRequestListener(app.fetch)
-
-  server.on('request', (req, res) => {
+  void (async () => {
     if (req.url === '/api' || req.url?.startsWith('/api/')) {
       hono(req, res)
       return
     }
 
+    const vite = await getVite()
     vite.middlewares(req, res, () => {
       res.statusCode = 404
       res.end('Not found')
     })
-  })
+  })()
+})
 
-  server.listen(port, () => {
-    console.log(`Dev server listening on http://localhost:${port}`)
-  })
+let vitePromise: Promise<import('vite').ViteDevServer> | null = null
 
-  const shutdown = async () => {
-    await vite.close()
-    server.close(() => process.exit(0))
+function getVite(): Promise<import('vite').ViteDevServer> {
+  if (!vitePromise) {
+    vitePromise = import('vite').then(({ createServer: createViteServer }) =>
+      createViteServer({
+        server: { middlewareMode: true, hmr: { server } },
+        appType: 'spa',
+      }),
+    )
   }
-  process.on('SIGINT', shutdown)
-  process.on('SIGTERM', shutdown)
+  return vitePromise
 }
+
+server.listen(port, host, () => {
+  const mode = process.env.NODE_ENV === 'production' ? 'Server' : 'Dev server'
+  console.log(`${mode} listening on http://localhost:${port}`)
+})
+
+process.on('SIGINT', () => void shutdown())
+process.on('SIGTERM', () => void shutdown())
