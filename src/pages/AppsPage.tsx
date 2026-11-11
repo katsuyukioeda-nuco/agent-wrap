@@ -52,7 +52,11 @@ export default function AppsPage() {
 
   return (
     <div className="bg-muted/30 flex min-h-screen items-center justify-center px-4">
-      <div className="flex w-full max-w-lg flex-col items-center gap-6">
+      <div className="flex w-full max-w-lg flex-col items-center gap-8">
+        <h1 className="text-center text-2xl font-semibold tracking-tight">
+          どちらを使っていますか？
+        </h1>
+
         <div className="grid w-full grid-cols-2 gap-4">
           {choices.map((choice) => {
             const Icon = choice.icon
