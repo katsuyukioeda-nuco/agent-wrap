@@ -17,21 +17,19 @@ export default function ConnectScreen({
 }) {
   const [copied, setCopied] = useState<'url' | 'prompt' | null>(null)
   const url = mcpUrl(window.location.origin, detail.app.id)
-  const serverName = `agent-wrap-${detail.app.id.slice(0, 8)}`
   const appTypeLabel = appTypeLabels[detail.app.appType]
 
   const prompt =
     detail.app.appType === 'codex'
-      ? `次の手順で agent-wrap に接続してください。
+      ? `agent-wrap に接続してください。
 
-1. Codex AppServer を起動
-   ${detail.codex?.binary ?? 'codex'} app-server --listen ws://127.0.0.1:4500
+Codex AppServer の URL: ws://127.0.0.1:4500
+agent-wrap の MCP サーバー: ${url}
 
-2. agent-wrap の MCP サーバーを追加
-   ${detail.codex?.binary ?? 'codex'} mcp add ${serverName} --url "${url}"
-
-3. MCP ツール connect_codex_app_server を呼び出す
-   { "url": "ws://127.0.0.1:4500" }
+- Codex AppServer が起動していない場合は起動してください。
+- agent-wrap の MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。
+- MCP ツール connect_codex_app_server に次の引数を渡してください。
+  { "url": "ws://127.0.0.1:4500" }
 
 接続するとこの画面は自動的に切り替わります。`
       : `OpenCode を起動してください。

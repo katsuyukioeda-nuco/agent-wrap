@@ -48,14 +48,15 @@ npm run dev          # http://localhost:3000
 Codex AppServer の起動はユーザー（エージェント）側の責務です。未接続時の画面に、次のようなプロンプトが表示されます。
 
 ```text
-1. Codex AppServer を起動
-   codex app-server --listen ws://127.0.0.1:4500
+agent-wrap に接続してください。
 
-2. agent-wrap の MCP サーバーを追加
-   codex mcp add agent-wrap-xxxxxxxx --url "http://localhost:3000/{appId}/mcp"
+Codex AppServer の URL: ws://127.0.0.1:4500
+agent-wrap の MCP サーバー: http://localhost:3000/{appId}/mcp
 
-3. MCP ツール connect_codex_app_server を呼び出す
-   { "url": "ws://127.0.0.1:4500" }
+- Codex AppServer が起動していない場合は起動してください。
+- agent-wrap の MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。
+- MCP ツール connect_codex_app_server に次の引数を渡してください。
+  { "url": "ws://127.0.0.1:4500" }
 ```
 
 MCP ツール `connect_codex_app_server` が URL を登録し、wrapper が WebSocket で接続します。接続に成功すると URL が DB に保存され、画面がアプリ部分に切り替わります。
