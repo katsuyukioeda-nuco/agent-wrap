@@ -108,7 +108,7 @@ export interface UpdateAppInput {
 }
 
 export async function listApps(): Promise<ConnectedApp[]> {
-  const [rows] = await pool.query<AppRow[]>(`${selectApp} ORDER BY created_at DESC`)
+  const [rows] = await pool.query<AppRow[]>(`${selectApp} ORDER BY created_at ASC`)
   return rows.map(toApp)
 }
 
