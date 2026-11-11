@@ -1,5 +1,3 @@
-import { Plus } from 'lucide-react'
-
 export default function AppHomeScreen() {
   return (
     <div
@@ -22,9 +20,12 @@ export default function AppHomeScreen() {
             <span className="bg-muted-foreground/30 size-1.5 rounded-full" />
             <span className="bg-muted-foreground/30 size-1.5 rounded-full" />
           </div>
-          <div className="flex flex-1 items-center justify-center">
-            <div className="bg-secondary flex size-10 items-center justify-center rounded-lg">
-              <Plus className="text-muted-foreground size-5" />
+          <div className="flex flex-1 flex-col justify-center gap-2 px-4">
+            <div className="bg-muted h-2 w-2/3 rounded-full" />
+            <div className="bg-muted h-2 w-1/2 rounded-full" />
+            <div className="flex gap-2 pt-1">
+              <div className="bg-muted h-8 flex-1 rounded-md" />
+              <div className="bg-muted h-8 flex-1 rounded-md" />
             </div>
           </div>
         </div>
