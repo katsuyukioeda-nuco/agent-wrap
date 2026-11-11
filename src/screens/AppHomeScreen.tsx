@@ -158,7 +158,19 @@ function VacantLot() {
       </div>
 
       <div className="bg-foreground/70 h-16 w-1.5" />
-      <div className="bg-foreground/10 absolute -bottom-2 left-1/2 h-6 w-56 -translate-x-1/2 -skew-x-12" />
+
+      <svg
+        aria-hidden="true"
+        className="text-foreground/10 pointer-events-none absolute top-full left-1/2 -translate-x-1/2"
+        width="280"
+        height="140"
+        viewBox="0 0 280 140"
+        fill="none"
+      >
+        <path d="M136 0 L144 0 L184 46 L176 52 Z" fill="currentColor" />
+        <path d="M158 40 L270 62 L250 110 L138 88 Z" fill="currentColor" />
+      </svg>
+
       <div className="border-border w-48 border-t border-dashed" />
 
       <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-14">
