@@ -1,9 +1,6 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { ConnectedApp, OpencodeConnectedApp } from '../../schema'
 import type {
   AgentTestResult,
   ConnectedAppDetail,
@@ -11,7 +8,7 @@ import type {
 } from '../../shared/agents'
 import { readServerSentEvents, type ServerSentEvent } from './sse'
 import type { AgentRuntime, ChatInput } from './types'
-import { delay, findFreePort } from './utils'
+import { delay } from './utils'
 
 interface DiscoveredService {
   url: string
@@ -27,7 +24,7 @@ function basicAuth(password: string): string {
  * すでに起動している OpenCode の認証済みサービスを探す。
  * 見つかればそのサーバーに相乗りし、見つからなければ自前で起動する。
  */
-async function discoverService(): Promise<DiscoveredService | null> {
+export async function discoverOpenCodeService(): Promise<DiscoveredService | null> {
   const stateHome = process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state')
   const candidates = [
     join(stateHome, 'opencode', 'service.json'),
@@ -109,23 +106,16 @@ function mapMcpStatus(status: unknown): McpServerSummary['status'] {
 }
 
 export class OpenCodeRuntime implements AgentRuntime {
-  private child: ChildProcessWithoutNullStreams | null = null
   private startPromise: Promise<void> | null = null
   private baseUrl: string | null = null
   private authHeader = ''
   private info: OpenCodeInfo | null = null
-  private stderr = ''
   private closed = false
-  private managed = false
-  private readonly app: ConnectedApp
-  private readonly settings: OpencodeConnectedApp
 
   constructor(detail: ConnectedAppDetail) {
-    if (detail.app.provider !== 'opencode' || !detail.opencode) {
+    if (detail.app.appType !== 'opencode' || !detail.opencode) {
       throw new Error('Connected app is not configured for OpenCode')
     }
-    this.app = detail.app
-    this.settings = detail.opencode
   }
 
   private async ensureStarted(): Promise<void> {
@@ -144,103 +134,17 @@ export class OpenCodeRuntime implements AgentRuntime {
   }
 
   private async start(): Promise<void> {
-    const discovered = await discoverService()
+    const discovered = await discoverOpenCodeService()
 
-    if (discovered) {
-      this.baseUrl = discovered.url
-      this.authHeader = discovered.password ? basicAuth(discovered.password) : ''
-      this.info = { version: discovered.version }
-      this.managed = false
-      return
-    }
-
-    const port =
-      this.settings.port > 0 ? this.settings.port : await findFreePort()
-    const password = randomBytes(24).toString('base64url')
-    const binary = this.settings.binary || 'opencode'
-    const baseUrl = `http://127.0.0.1:${port}`
-
-    this.managed = true
-    this.baseUrl = baseUrl
-    this.authHeader = basicAuth(password)
-    this.stderr = ''
-
-    const child = spawn(
-      binary,
-      ['serve', '--port', String(port), '--hostname', '127.0.0.1'],
-      {
-        cwd: this.app.workingDir,
-        env: {
-          ...process.env,
-          OPENCODE_SERVER_PASSWORD: password,
-        },
-        stdio: ['pipe', 'pipe', 'pipe'],
-      },
-    )
-
-    this.child = child
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', () => undefined)
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => {
-      this.stderr = (this.stderr + chunk).slice(-4000)
-    })
-
-    let exitError: Error | null = null
-    child.once('error', (error) => {
-      exitError = error
-    })
-    child.once('exit', (code, signal) => {
-      if (this.child === child) {
-        this.child = null
-        this.baseUrl = null
-        this.authHeader = ''
-        this.info = null
-      }
-      exitError = new Error(
-        `opencode serve exited (${signal ?? code ?? 'unknown'})${this.stderr ? `: ${this.stderr.trim()}` : ''}`,
+    if (!discovered) {
+      throw new Error(
+        'OpenCode server is not running. Start OpenCode or run `opencode serve --service`.',
       )
-    })
-
-    const deadline = Date.now() + 30_000
-
-    while (Date.now() < deadline) {
-      if (exitError) {
-        this.stopChild(child)
-        throw exitError
-      }
-
-      try {
-        const response = await fetch(`${baseUrl}/api/info`, {
-          headers: { Authorization: this.authHeader },
-        })
-        if (response.ok) {
-          this.info = (await response.json()) as OpenCodeInfo
-          return
-        }
-      } catch {
-        // 起動途中は接続拒否になるのでリトライする。
-      }
-
-      await delay(300)
     }
 
-    this.stopChild(child)
-    throw new Error(
-      `OpenCode server did not start within 30s${this.stderr ? `: ${this.stderr.trim()}` : ''}`,
-    )
-  }
-
-  private stopChild(child: ChildProcessWithoutNullStreams): void {
-    if (this.child === child) {
-      this.child = null
-      this.baseUrl = null
-      this.authHeader = ''
-      this.info = null
-    }
-    child.kill('SIGTERM')
-    const timer = setTimeout(() => child.kill('SIGKILL'), 3000)
-    timer.unref?.()
+    this.baseUrl = discovered.url
+    this.authHeader = discovered.password ? basicAuth(discovered.password) : ''
+    this.info = { version: discovered.version }
   }
 
   private async request(path: string, init: RequestInit = {}): Promise<Response> {
@@ -274,7 +178,7 @@ export class OpenCodeRuntime implements AgentRuntime {
     const version = this.info?.version
     return {
       ok: true,
-      provider: 'opencode',
+      appType: 'opencode',
       message: version ? `OpenCode ${version}` : 'Connected',
       version,
     }
@@ -290,7 +194,7 @@ export class OpenCodeRuntime implements AgentRuntime {
         method: 'POST',
         body: JSON.stringify({
           title: message.slice(0, 60),
-          location: { directory: this.app.workingDir },
+          location: { directory: process.cwd() },
         }),
       })
       activeSessionId = created.data.id
@@ -546,7 +450,7 @@ export class OpenCodeRuntime implements AgentRuntime {
 
     const result = await this.json<{
       data: Array<{ name: string; status: { status: string; error?: string } }>
-    }>(`/api/mcp?location.directory=${encodeURIComponent(this.app.workingDir)}`)
+    }>(`/api/mcp?location.directory=${encodeURIComponent(process.cwd())}`)
 
     return result.data.map((server) => ({
       name: server.name,
@@ -558,27 +462,8 @@ export class OpenCodeRuntime implements AgentRuntime {
 
   async close(): Promise<void> {
     this.closed = true
-
-    if (!this.managed) {
-      this.baseUrl = null
-      this.authHeader = ''
-      this.info = null
-      return
-    }
-
-    const child = this.child
-    if (!child) {
-      return
-    }
-
-    this.stopChild(child)
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, 3000)
-      timer.unref?.()
-      child.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-    })
+    this.baseUrl = null
+    this.authHeader = ''
+    this.info = null
   }
 }

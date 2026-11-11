@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Check, Copy, Plug } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Copy } from 'lucide-react'
+import type { ConnectedAppDetail } from '../../shared/agents'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -7,57 +8,39 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { useApp } from '@/hooks/use-app'
-import { api } from '@/lib/api'
-import { mcpUrl, providerLabels } from '@/lib/app'
+import { mcpUrl, appTypeLabels } from '@/lib/app'
 
-interface PublicConfig {
-  workingDir: string
-  mcpOrigin: string
-}
-
-export default function OverviewScreen() {
-  const { detail } = useApp()
-  const [mcpOrigin, setMcpOrigin] = useState(window.location.origin)
+export default function ConnectScreen({
+  detail,
+}: {
+  detail: ConnectedAppDetail
+}) {
   const [copied, setCopied] = useState<'url' | 'prompt' | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    void api<PublicConfig>('/config')
-      .then((config) => {
-        if (!cancelled) {
-          setMcpOrigin(config.mcpOrigin)
-        }
-      })
-      .catch(() => undefined)
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const url = mcpUrl(mcpOrigin, detail.app.id)
+  const url = mcpUrl(window.location.origin, detail.app.id)
   const serverName = `agent-wrap-${detail.app.id.slice(0, 8)}`
-  const provider = providerLabels[detail.app.provider]
+  const appTypeLabel = appTypeLabels[detail.app.appType]
 
   const prompt =
-    detail.app.provider === 'codex'
-      ? `次のMCPサーバーをCodexに追加してください。
+    detail.app.appType === 'codex'
+      ? `次の手順で agent-wrap に接続してください。
 
-codex mcp add ${serverName} --url "${url}"
+1. Codex AppServer を起動
+   ${detail.codex?.binary ?? 'codex'} app-server --listen ws://127.0.0.1:4500
 
-追加後に \`codex mcp list\` で ${serverName} が表示されることを確認してください。`
-      : `次のMCPサーバーをOpenCodeに追加してください。
+2. agent-wrap の MCP サーバーを追加
+   ${detail.codex?.binary ?? 'codex'} mcp add ${serverName} --url "${url}"
 
-OpenCode の設定ファイル（opencode.json / opencode.jsonc）の mcp.servers に以下を追加してください。
+3. MCP ツール connect_codex_app_server を呼び出す
+   { "url": "ws://127.0.0.1:4500" }
 
-"${serverName}": {
-  "type": "remote",
-  "url": "${url}"
-}
+接続するとこの画面は自動的に切り替わります。`
+      : `OpenCode を起動してください。
 
-追加後に OpenCode を再起動し、MCPサーバー ${serverName} が接続されることを確認してください。`
+OpenCode アプリを起動するか、次のコマンドでサーバーを起動します。
+
+${detail.opencode?.binary ?? 'opencode'} serve --service
+
+起動すると自動的に接続されます。`
 
   async function handleCopy(kind: 'url' | 'prompt', value: string): Promise<void> {
     try {
@@ -72,10 +55,7 @@ OpenCode の設定ファイル（opencode.json / opencode.jsonc）の mcp.server
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Plug className="size-4" />
-          MCP
-        </CardTitle>
+        <CardTitle>{appTypeLabel} に接続</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
@@ -98,7 +78,7 @@ OpenCode の設定ファイル（opencode.json / opencode.jsonc）の mcp.server
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium">
-              {provider} に貼り付けるプロンプト
+              {appTypeLabel} に貼り付けるプロンプト
             </span>
             <Button
               variant="ghost"

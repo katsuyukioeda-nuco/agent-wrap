@@ -1,4 +1,4 @@
-import type { AgentProvider } from '../../schema'
+import type { AppType } from '../../schema'
 import type { ConnectedAppDetail } from '../../shared/agents'
 
 export interface AppOutletContext {
@@ -6,13 +6,9 @@ export interface AppOutletContext {
   refresh: () => Promise<void>
 }
 
-export const providerLabels: Record<AgentProvider, string> = {
+export const appTypeLabels: Record<AppType, string> = {
   codex: 'Codex',
   opencode: 'OpenCode',
-}
-
-export function sessionStorageKey(appId: string): string {
-  return `agent-wrap:session:${appId}`
 }
 
 export function mcpUrl(origin: string, appId: string): string {

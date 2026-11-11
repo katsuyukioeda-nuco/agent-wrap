@@ -1,7 +1,7 @@
 import type { RowDataPacket } from 'mysql2'
 import { v7 as uuidv7 } from 'uuid'
 import type {
-  AgentProvider,
+  AppType,
   CodexConnectedApp,
   ConnectedApp,
   OpencodeConnectedApp,
@@ -11,9 +11,7 @@ import { pool } from '../db'
 
 interface AppRow extends RowDataPacket {
   id: string
-  name: string
-  provider: AgentProvider
-  workingDir: string
+  appType: AppType
   createdAt: Date
   updatedAt: Date
 }
@@ -24,6 +22,7 @@ interface CodexRow extends RowDataPacket {
   binaryPath: string
   sandbox: CodexConnectedApp['sandbox']
   approvalPolicy: CodexConnectedApp['approvalPolicy']
+  appServerUrl: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -38,14 +37,13 @@ interface OpencodeRow extends RowDataPacket {
 }
 
 const selectApp = `
-  SELECT id, name, provider, working_dir AS workingDir,
-         created_at AS createdAt, updated_at AS updatedAt
+  SELECT id, app_type AS appType, created_at AS createdAt, updated_at AS updatedAt
   FROM connected_apps
 `
 
 const selectCodex = `
   SELECT id, connected_app_id AS connectedAppId, binary_path AS binaryPath, sandbox,
-         approval_policy AS approvalPolicy,
+         approval_policy AS approvalPolicy, app_server_url AS appServerUrl,
          created_at AS createdAt, updated_at AS updatedAt
   FROM codex_connected_apps
 `
@@ -59,9 +57,7 @@ const selectOpencode = `
 function toApp(row: AppRow): ConnectedApp {
   return {
     id: row.id,
-    name: row.name,
-    provider: row.provider,
-    workingDir: row.workingDir,
+    appType: row.appType,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -74,6 +70,7 @@ function toCodex(row: CodexRow): CodexConnectedApp {
     binary: row.binaryPath,
     sandbox: row.sandbox,
     approvalPolicy: row.approvalPolicy,
+    appServerUrl: row.appServerUrl,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -91,9 +88,7 @@ function toOpencode(row: OpencodeRow): OpencodeConnectedApp {
 }
 
 export interface CreateAppInput {
-  name: string
-  provider: AgentProvider
-  workingDir: string
+  appType: AppType
   codex?: {
     binary: string
     sandbox: CodexConnectedApp['sandbox']
@@ -106,8 +101,6 @@ export interface CreateAppInput {
 }
 
 export interface UpdateAppInput {
-  name?: string
-  workingDir?: string
   codex?: Partial<
     Pick<CodexConnectedApp, 'binary' | 'sandbox' | 'approvalPolicy'>
   >
@@ -129,7 +122,7 @@ export async function getAppDetail(id: string): Promise<ConnectedAppDetail | nul
 
   const app = toApp(row)
 
-  if (app.provider === 'codex') {
+  if (app.appType === 'codex') {
     const [codexRows] = await pool.query<CodexRow[]>(
       `${selectCodex} WHERE connected_app_id = ?`,
       [id],
@@ -161,23 +154,23 @@ export async function createApp(input: CreateAppInput): Promise<ConnectedAppDeta
     await connection.beginTransaction()
 
     await connection.execute(
-      `INSERT INTO connected_apps
-         (id, name, provider, working_dir, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, input.name, input.provider, input.workingDir, now, now],
+      `INSERT INTO connected_apps (id, app_type, created_at, updated_at)
+       VALUES (?, ?, ?, ?)`,
+      [id, input.appType, now, now],
     )
 
-    if (input.provider === 'codex') {
+    if (input.appType === 'codex') {
       await connection.execute(
         `INSERT INTO codex_connected_apps
-           (id, connected_app_id, binary_path, sandbox, approval_policy, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (id, connected_app_id, binary_path, sandbox, approval_policy, app_server_url, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           uuidv7(),
           id,
           input.codex?.binary ?? 'codex',
           input.codex?.sandbox ?? 'workspace-write',
           input.codex?.approvalPolicy ?? 'never',
+          null,
           now,
           now,
         ],
@@ -222,13 +215,11 @@ export async function updateApp(
     await connection.beginTransaction()
 
     await connection.execute(
-      `UPDATE connected_apps
-       SET name = ?, working_dir = ?, updated_at = ?
-       WHERE id = ?`,
-      [input.name ?? current.app.name, input.workingDir ?? current.app.workingDir, now, id],
+      'UPDATE connected_apps SET updated_at = ? WHERE id = ?',
+      [now, id],
     )
 
-    if (current.app.provider === 'codex') {
+    if (current.app.appType === 'codex') {
       const settings = current.codex
       const patch = input.codex ?? {}
       await connection.execute(
@@ -263,6 +254,18 @@ export async function updateApp(
   }
 
   return getAppDetail(id)
+}
+
+export async function setCodexAppServerUrl(
+  connectedAppId: string,
+  url: string | null,
+): Promise<void> {
+  await pool.execute(
+    `UPDATE codex_connected_apps
+     SET app_server_url = ?, updated_at = ?
+     WHERE connected_app_id = ?`,
+    [url, new Date(), connectedAppId],
+  )
 }
 
 export async function deleteApp(id: string): Promise<boolean> {

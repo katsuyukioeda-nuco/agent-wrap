@@ -9,24 +9,23 @@ AI エージェントアプリのラッパー。Codex / OpenCode のハーネス
 1. リポジトリを clone して `npm run dev`
 2. `http://localhost:3000/` を開く
 3. **Codex** または **OpenCode** を選ぶ
-4. 認証済みのハーネスに接続され、`/{connectedAppId}/` のトップページが開く
-5. あとは `src/screens` や `server/mcp/tools.ts` を直接編集して、自分のアプリに育てる
+4. 未接続なら、画面に表示されるプロンプトをエージェントに貼り付ける
+5. 接続されるとプロンプトが消え、`src/screens/AppHomeScreen.tsx` のアプリ画面に切り替わる
+6. あとは `src/screens` や `server/mcp/tools.ts` を直接編集して育てる
 
-プロジェクト選択、アプリ名、作業ディレクトリ、モデル、API キー、ポートなどの入力はありません。
+アプリ名、作業ディレクトリ、モデル、API キー、ポートなどの入力はありません。
 
-- 作業ディレクトリは **clone したリポジトリのルート**
-- アプリ名は **ディレクトリ名から自動生成**
+- 作業ディレクトリは **clone したリポジトリのルート**（`process.cwd()`）
 - モデルは **ハーネス側のデフォルト**
-- OpenCode は **起動中の認証済みサーバーを自動検出**して接続（見つからなければ起動）
-- Codex は **既存の `codex` 認証を使って `codex app-server` を起動**
-
-設定 UI はあえてありません。接続方法を変えたい場合はソースを直接編集します。
+- Codex AppServer は **ユーザー（エージェント）側で起動**
+- OpenCode は **起動中の認証済みサーバーを自動検出**
+- 設定 UI はありません。接続方法を変えたい場合はソースを直接編集します
 
 ## 必要なもの
 
 - Node.js 20.19 以上
 - Docker / Docker Compose
-- Codex CLI（`codex login` 済み）または OpenCode（起動済み / 認証済み）
+- Codex CLI または OpenCode（認証済み）
 
 ## クイックスタート
 
@@ -36,9 +35,35 @@ npm install
 
 npm run db:up        # MySQL を Docker で起動
 npm run db:migrate   # DDL マイグレーション
-npm run db:seed      # デモユーザー
 
 npm run dev          # http://localhost:3000
+```
+
+## 接続
+
+### Codex
+
+Codex AppServer の起動はユーザー（エージェント）側の責務です。未接続時の画面に、次のようなプロンプトが表示されます。
+
+```text
+1. Codex AppServer を起動
+   codex app-server --listen ws://127.0.0.1:4500
+
+2. agent-wrap の MCP サーバーを追加
+   codex mcp add agent-wrap-xxxxxxxx --url "http://localhost:3000/{appId}/mcp"
+
+3. MCP ツール connect_codex_app_server を呼び出す
+   { "url": "ws://127.0.0.1:4500" }
+```
+
+MCP ツール `connect_codex_app_server` が URL を登録し、wrapper が WebSocket で接続します。接続に成功すると URL が DB に保存され、画面がアプリ部分に切り替わります。
+
+### OpenCode
+
+`~/.local/state/opencode/service.json`（`$XDG_STATE_HOME` 配下）を読み、起動中の認証済みサーバーへ接続します。見つからない場合は画面にサーバー起動用のプロンプトが表示されます。
+
+```bash
+opencode serve --service
 ```
 
 ## URL
@@ -46,49 +71,8 @@ npm run dev          # http://localhost:3000
 | URL | 内容 |
 | --- | --- |
 | `/` | 接続先の選択 |
-| `/{appId}/` | Connected App のトップ（MCP 設定） |
+| `/{appId}/` | アプリ本体（未接続なら接続プロンプト） |
 | `/{appId}/mcp` | アプリ専用 MCP エンドポイント |
-
-## 接続の仕組み
-
-### Codex
-
-Connected App ごとに `codex app-server` を JSON-RPC / stdio で起動します。
-
-- `initialize` → `thread/start` → `turn/start`
-- ストリーミング通知を SSE に変換して UI に流す
-- 既存の `~/.codex` の認証・スレッド履歴を利用
-- 会話 ID はブラウザの `localStorage` に保存し、次回 `thread/resume`
-
-### OpenCode
-
-起動中の認証済みサーバーを探して接続します。
-
-1. `$XDG_STATE_HOME/opencode/service.json`（通常 `~/.local/state/opencode/service.json`）を読む
-2. `url` と `password` で `/api/info` を確認
-3. 見つかればそのサーバーに接続（プロセスは終了させない）
-4. 見つからなければ `opencode serve` を空きポートで起動
-
-セッション作成時に `location: { directory: <repo root> }` を渡すため、既存サーバーに相乗りしても作業ディレクトリはこのリポジトリになります。
-
-## 画面を追加する
-
-画面は Connected App 配下の URL に追加します。例: `/{appId}/my-screen`。
-
-1. `src/screens/MyScreen.tsx` を作る
-2. `src/App.tsx` の `/:appId` 配下にルートを追加
-3. `AppWorkspacePage` や各画面から、そのルートへのリンクを追加
-
-```tsx
-import { useApp } from '@/hooks/use-app'
-
-export default function MyScreen() {
-  const { detail, refresh } = useApp()
-  return <div>{detail.app.name}</div>
-}
-```
-
-`detail.app` に Connected App、`detail.codex` / `detail.opencode` にプロバイダー設定が入ります。
 
 ## MCP
 
@@ -98,9 +82,12 @@ export default function MyScreen() {
 http://localhost:3000/{appId}/mcp
 ```
 
-Connected App のトップページに、この URL と **Codex / OpenCode に貼り付けるだけで設定できるプロンプト** を表示しています。
+デフォルトのツール:
 
-公開ツールは `server/mcp/tools.ts` で定義します。サンプルとして `get_app_info` と `list_todos` が入っています。
+- `get_app_info` — アプリ ID・種別・Codex AppServer URL
+- `connect_codex_app_server` — Codex AppServer の WebSocket URL を登録して接続（Codex アプリのみ）
+
+追加は `server/mcp/tools.ts` で行います。
 
 ```ts
 server.registerTool(
@@ -116,43 +103,38 @@ server.registerTool(
 )
 ```
 
-Codex から接続:
+## 画面を追加する
 
-```bash
-codex mcp add agent-wrap --url "http://localhost:3000/{appId}/mcp"
-```
+画面は Connected App 配下の URL に追加します。例: `/{appId}/my-screen`。
 
-OpenCode から接続:
+1. `src/screens/MyScreen.tsx` を作る
+2. `src/App.tsx` の `/:appId` 配下にルートを追加
+3. `AppWorkspacePage` や各画面から、そのルートへのリンクを追加
 
-```json
-{
-  "mcp": {
-    "servers": {
-      "agent-wrap": {
-        "type": "remote",
-        "url": "http://localhost:3000/{appId}/mcp"
-      }
-    }
-  }
+```tsx
+import { useApp } from '@/hooks/use-app'
+
+export default function MyScreen() {
+  const { detail, refresh } = useApp()
+  return <div>{detail.app.appType}</div>
 }
 ```
 
-## API を追加する
+`detail.app` に Connected App、`detail.codex` / `detail.opencode` にアプリ種別ごとの設定が入ります。
 
-`server/routes/` に Hono ルートを追加し、`server/app.ts` でマウントします。
+## API
 
 | Method | Path | 内容 |
 | --- | --- | --- |
 | GET | `/api/health` | ヘルスチェック |
-| GET | `/api/config` | 作業ディレクトリ・MCP origin |
-| GET / POST | `/api/apps` | Connected App 一覧 / 追加 |
-| GET / PATCH / DELETE | `/api/apps/:id` | 詳細 / プロバイダー設定更新 / 削除 |
-| POST | `/api/apps/:id/test` | ハーネス接続テスト |
-| GET | `/api/apps/:id/mcp-servers` | プロバイダー側の MCP 状態 |
+| GET / POST | `/api/apps` | Connected App 一覧 / 作成 |
+| GET / PATCH / DELETE | `/api/apps/:id` | 詳細 / 設定更新 / 削除 |
+| GET | `/api/apps/:id/connection` | 接続状態 |
+| POST | `/api/apps/:id/connect` | Codex AppServer URL の登録（HTTP フォールバック） |
+| POST | `/api/apps/:id/test` | 接続テスト |
+| GET | `/api/apps/:id/mcp-servers` | ハーネス側の MCP 状態 |
 | POST | `/api/apps/:id/chat` | SSE チャット |
 | POST | `/api/apps/:id/chat/interrupt` | 実行中断 |
-| GET / POST | `/api/users`, `/api/todos` | デモ CRUD |
-| PATCH / DELETE | `/api/todos/:id` | デモ更新 / 削除 |
 
 ## データベース
 
@@ -160,15 +142,18 @@ Prisma は使わず、`db/migrations/*.sql` の DDL を順番に適用します�
 
 ```bash
 npm run db:migrate
-npm run db:seed
-npm run db:reset     # ボリューム削除 → 再作成 → migrate → seed
+npm run db:reset     # ボリューム削除 → 再作成 → migrate
 ```
 
-新しいテーブルを追加するとき:
+### テーブル
 
-1. `db/migrations/0004_xxx.sql` を追加
-2. `schema.ts` に interface を追加
-3. 必要なら `server/repositories/` に読み書きを追加
+| テーブル | 役割 |
+| --- | --- |
+| `connected_apps` | `id`, `appType`, `createdAt`, `updatedAt` |
+| `codex_connected_apps` | `connectedAppId` で接続。binary / sandbox / approval policy / appServerUrl |
+| `opencode_connected_apps` | `connectedAppId` で接続。binary / port |
+
+`connected_apps.app_type` は `codex` または `opencode` です。
 
 ### schema.ts の規約
 
@@ -177,15 +162,18 @@ npm run db:reset     # ボリューム削除 → 再作成 → migrate → seed
 - `createdAt` は必須。ISO8601 文字列
 - `updatedAt` は更新を許可するエンティティのみ持つ。ISO8601 文字列
 
-### テーブル
-
-| テーブル | 役割 |
-| --- | --- |
-| `connected_apps` | 名前、provider、作業ディレクトリ |
-| `codex_connected_apps` | `connectedAppId` で接続。binary / sandbox / approval policy |
-| `opencode_connected_apps` | `connectedAppId` で接続。binary / port |
-
-`connected_apps.provider` は `codex` または `opencode` です。プロバイダーは作成後に変更できません。
+```ts
+export interface CodexConnectedApp {
+  id: string // UUIDv7
+  connectedAppId: ConnectedApp['id']
+  binary: string
+  sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
+  approvalPolicy: 'never' | 'on-request' | 'untrusted'
+  appServerUrl: string | null
+  createdAt: string // ISO8601
+  updatedAt: string // ISO8601
+}
+```
 
 MySQL の `BINARY` は予約語のため、DB カラムは `binary_path` にしています。API / schema 上は `binary` です。
 
@@ -213,15 +201,15 @@ npm run start
 | `HOST` | `127.0.0.1` | バインド先 |
 | `PORT` | `3000` | アプリサーバーのポート。MCP URL の port |
 | `DATABASE_URL` | `mysql://app:app@127.0.0.1:3307/app` | MySQL 接続先 |
-| `MCP_PUBLIC_ORIGIN` | `http://localhost:${PORT}` | UI に表示する MCP origin |
+| `MCP_PUBLIC_ORIGIN` | `http://localhost:${PORT}` | `/mcp-servers` API が返す origin |
 | `MYSQL_*`, `DB_PORT` | `.env.example` 参照 | Docker Compose の MySQL 設定 |
 
 ## ディレクトリ
 
 ```
 src/
-  pages/          一覧・ワークスペース
-  screens/        Connected App 配下の画面（ここに追加）
+  pages/          接続先選択・ワークスペース
+  screens/        アプリ本体の画面（ここに追加）
   components/ui/  shadcn/ui
   hooks/          useApp
   lib/            API / SSE クライアント
@@ -234,7 +222,6 @@ server/
   index.ts        HTTP サーバー
 db/
   migrations/     DDL
-  seed.sql
 shared/
   agents.ts       サーバー / UI 共通の API 型
 schema.ts         アプリケーションスキーマ

@@ -12,8 +12,7 @@ const runtimes = new Map<string, RuntimeEntry>()
 
 function signature(detail: ConnectedAppDetail): string {
   return JSON.stringify({
-    provider: detail.app.provider,
-    workingDir: detail.app.workingDir,
+    appType: detail.app.appType,
     codex: detail.codex,
     opencode: detail.opencode,
   })
@@ -34,7 +33,7 @@ export async function getRuntime(detail: ConnectedAppDetail): Promise<AgentRunti
   }
 
   const runtime =
-    detail.app.provider === 'codex'
+    detail.app.appType === 'codex'
       ? new CodexRuntime(detail)
       : new OpenCodeRuntime(detail)
 

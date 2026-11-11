@@ -1,7 +1,7 @@
-import { basename } from 'node:path'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
+import { connectCodexAppServer, getConnectionStatus } from '../agents/connection'
 import { getRuntime, stopRuntime } from '../agents/manager'
 import { errorMessage } from '../agents/types'
 import { closeMcpSessionsForApp } from '../mcp/handler'
@@ -28,7 +28,7 @@ const opencodePatchSchema = z.object({
 })
 
 const createSchema = z.object({
-  provider: z.enum(['codex', 'opencode']),
+  appType: z.enum(['codex', 'opencode']),
 })
 
 const updateSchema = z.object({
@@ -66,13 +66,8 @@ apps.post('/', async (c) => {
     return c.json({ error: 'Invalid request body', issues: parsed.error.issues }, 400)
   }
 
-  // このリポジトリを clone したディレクトリを、そのまま Connected App の
-  // 作業ディレクトリにする。プロジェクト選択などは利用者が画面を追加して作り込む。
-  const workingDir = process.cwd()
   const detail = await createApp({
-    name: basename(workingDir) || 'agent-wrap',
-    provider: parsed.data.provider,
-    workingDir,
+    appType: parsed.data.appType,
   })
 
   return c.json(detail, 201)
@@ -84,6 +79,31 @@ apps.get('/:id', async (c) => {
     return c.json({ error: 'Connected app not found' }, 404)
   }
   return c.json(detail)
+})
+
+apps.get('/:id/connection', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  return c.json(await getConnectionStatus(detail))
+})
+
+apps.post('/:id/connect', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const parsed = z.object({ url: z.string().trim().min(1).max(1024) }).safeParse(body)
+
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid request body', issues: parsed.error.issues }, 400)
+  }
+
+  try {
+    const result = await connectCodexAppServer(c.req.param('id'), parsed.data.url)
+    return c.json({ connected: true, ...result })
+  } catch (error) {
+    return c.json({ connected: false, error: errorMessage(error) }, 502)
+  }
 })
 
 apps.patch('/:id', async (c) => {
@@ -101,10 +121,10 @@ apps.patch('/:id', async (c) => {
     return c.json({ error: 'Invalid request body', issues: parsed.error.issues }, 400)
   }
 
-  if (current.app.provider === 'codex' && parsed.data.opencode) {
+  if (current.app.appType === 'codex' && parsed.data.opencode) {
     return c.json({ error: 'This app is configured for Codex' }, 400)
   }
-  if (current.app.provider === 'opencode' && parsed.data.codex) {
+  if (current.app.appType === 'opencode' && parsed.data.codex) {
     return c.json({ error: 'This app is configured for OpenCode' }, 400)
   }
 
@@ -146,7 +166,7 @@ apps.post('/:id/test', async (c) => {
   } catch (error) {
     return c.json({
       ok: false,
-      provider: detail.app.provider,
+      appType: detail.app.appType,
       message: errorMessage(error),
     })
   }

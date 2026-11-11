@@ -8,15 +8,18 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import type { ConnectedApp } from '../../schema'
-import type { ConnectedAppDetail } from '../../shared/agents'
+import type { ConnectedAppDetail, ConnectionStatus } from '../../shared/agents'
+import { appTypeLabels } from '@/lib/app'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import ConnectScreen from '@/screens/ConnectScreen'
 
 export default function AppWorkspacePage() {
   const { appId } = useParams<{ appId: string }>()
   const [detail, setDetail] = useState<ConnectedAppDetail | null>(null)
   const [apps, setApps] = useState<ConnectedApp[]>([])
+  const [connection, setConnection] = useState<ConnectionStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,8 +33,16 @@ export default function AppWorkspacePage() {
         api<ConnectedAppDetail>(`/apps/${appId}`),
         api<ConnectedApp[]>('/apps'),
       ])
+      const status = await api<ConnectionStatus>(
+        `/apps/${appId}/connection`,
+      ).catch(() => ({
+        connected: false,
+        appType: next.app.appType,
+        url: null,
+      }))
       setDetail(next)
       setApps(list)
+      setConnection(status)
       setError(null)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError))
@@ -43,6 +54,28 @@ export default function AppWorkspacePage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!appId || connection?.connected) {
+      return
+    }
+
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void api<ConnectionStatus>(`/apps/${appId}/connection`)
+        .then((status) => {
+          if (!cancelled) {
+            setConnection(status)
+          }
+        })
+        .catch(() => undefined)
+    }, 2000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [appId, connection?.connected])
 
   if (loading) {
     return (
@@ -107,7 +140,11 @@ export default function AppWorkspacePage() {
             </Link>
           </div>
 
-          <Outlet context={{ detail, refresh: load }} />
+          {connection?.connected ? (
+            <Outlet context={{ detail, refresh: load }} />
+          ) : (
+            <ConnectScreen detail={detail} />
+          )}
         </main>
       </div>
     </div>
@@ -123,13 +160,14 @@ function AppRailIcon({
   active: boolean
   compact?: boolean
 }) {
-  const Icon = app.provider === 'codex' ? Code2 : TerminalSquare
+  const Icon = app.appType === 'codex' ? Code2 : TerminalSquare
+  const title = `${appTypeLabels[app.appType]} ${app.id.slice(0, 8)}`
 
   return (
     <Link
       to={`/${app.id}/`}
-      title={app.name}
-      aria-label={`${app.name} を開く`}
+      title={title}
+      aria-label={`${title} を開く`}
       className={cn(
         'flex shrink-0 items-center justify-center border transition-colors',
         compact ? 'size-8 rounded-lg' : 'size-11 rounded-xl',

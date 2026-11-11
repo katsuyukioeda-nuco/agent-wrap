@@ -1,5 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import type { CodexConnectedApp, ConnectedApp } from '../../schema'
+import type { CodexConnectedApp } from '../../schema'
 import type {
   AgentStreamEvent,
   AgentTestResult,
@@ -146,25 +145,21 @@ async function forwardItemCompleted(
 }
 
 export class CodexRuntime implements AgentRuntime {
-  private child: ChildProcessWithoutNullStreams | null = null
+  private ws: WebSocket | null = null
   private startPromise: Promise<void> | null = null
   private nextId = 1
   private pending = new Map<number, PendingRequest>()
   private listeners = new Set<(message: RpcMessage) => void | Promise<void>>()
   private eventQueue: Promise<void> = Promise.resolve()
-  private buffer = ''
-  private stderr = ''
   private userAgent = ''
   private closed = false
   private activeTurns = new Map<string, string>()
-  private readonly app: ConnectedApp
   private readonly settings: CodexConnectedApp
 
   constructor(detail: ConnectedAppDetail) {
-    if (detail.app.provider !== 'codex' || !detail.codex) {
+    if (detail.app.appType !== 'codex' || !detail.codex) {
       throw new Error('Connected app is not configured for Codex')
     }
-    this.app = detail.app
     this.settings = detail.codex
   }
 
@@ -176,7 +171,7 @@ export class CodexRuntime implements AgentRuntime {
     if (this.closed) {
       throw new Error('Codex runtime is closed')
     }
-    if (this.child) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return
     }
     if (!this.startPromise) {
@@ -188,33 +183,61 @@ export class CodexRuntime implements AgentRuntime {
   }
 
   private async start(): Promise<void> {
-    const binary = this.connection.binary || 'codex'
-    const child = spawn(binary, ['app-server'], {
-      cwd: this.app.workingDir,
-      env: process.env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
+    const url = this.connection.appServerUrl
 
-    this.child = child
-    this.buffer = ''
-    this.stderr = ''
-
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => this.onData(chunk))
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => {
-      this.stderr = (this.stderr + chunk).slice(-4000)
-    })
-    child.on('error', (error) => this.handleExit(error))
-    child.on('exit', (code, signal) => {
-      this.handleExit(
-        new Error(
-          `codex app-server exited (${signal ?? code ?? 'unknown'})${this.stderr ? `: ${this.stderr.trim()}` : ''}`,
-        ),
+    if (!url) {
+      throw new Error(
+        'Codex AppServer is not connected. Run connect_codex_app_server with its WebSocket URL.',
       )
+    }
+    if (!/^wss?:\/\//i.test(url)) {
+      throw new Error('Codex AppServer URL must start with ws:// or wss://')
+    }
+
+    const ws = new WebSocket(url)
+    this.ws = ws
+
+    ws.addEventListener('message', (event) => this.onMessage(event.data))
+    ws.addEventListener('close', () => {
+      if (this.ws === ws) {
+        this.ws = null
+        this.handleExit(new Error('Codex AppServer disconnected'))
+      }
     })
 
     try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('Timed out connecting to Codex AppServer')),
+          10_000,
+        )
+
+        ws.addEventListener(
+          'open',
+          () => {
+            clearTimeout(timer)
+            resolve()
+          },
+          { once: true },
+        )
+        ws.addEventListener(
+          'error',
+          () => {
+            clearTimeout(timer)
+            reject(new Error(`Failed to connect to Codex AppServer: ${url}`))
+          },
+          { once: true },
+        )
+        ws.addEventListener(
+          'close',
+          () => {
+            clearTimeout(timer)
+            reject(new Error('Codex AppServer closed before connecting'))
+          },
+          { once: true },
+        )
+      })
+
       const info = await this.request<{ userAgent?: string }>('initialize', {
         clientInfo: {
           name: 'agent_wrap',
@@ -230,34 +253,25 @@ export class CodexRuntime implements AgentRuntime {
       this.send({ method: 'initialized' })
     } catch (error) {
       this.handleExit(error instanceof Error ? error : new Error(String(error)))
-      child.kill('SIGTERM')
+      ws.close()
       throw error
     }
   }
 
-  private onData(chunk: string): void {
-    this.buffer += chunk
-
-    let index = this.buffer.indexOf('\n')
-    while (index !== -1) {
-      const line = this.buffer.slice(0, index).trim()
-      this.buffer = this.buffer.slice(index + 1)
-      index = this.buffer.indexOf('\n')
-
-      if (!line) {
-        continue
-      }
-
-      let message: RpcMessage
-      try {
-        message = JSON.parse(line) as RpcMessage
-      } catch {
-        console.warn(`[codex] Ignoring non-JSON line: ${line.slice(0, 200)}`)
-        continue
-      }
-
-      this.handleMessage(message)
+  private onMessage(data: unknown): void {
+    if (typeof data !== 'string') {
+      return
     }
+
+    let message: RpcMessage
+    try {
+      message = JSON.parse(data) as RpcMessage
+    } catch {
+      console.warn(`[codex] Ignoring non-JSON message: ${data.slice(0, 200)}`)
+      return
+    }
+
+    this.handleMessage(message)
   }
 
   private handleMessage(message: RpcMessage): void {
@@ -325,8 +339,8 @@ export class CodexRuntime implements AgentRuntime {
 
   private request<T = unknown>(method: string, params?: unknown, timeoutMs = 60_000): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      if (!this.child) {
-        reject(new Error('codex app-server is not running'))
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('Codex AppServer is not connected'))
         return
       }
 
@@ -353,11 +367,11 @@ export class CodexRuntime implements AgentRuntime {
   }
 
   private send(message: unknown): void {
-    const child = this.child
-    if (!child) {
-      throw new Error('codex app-server is not running')
+    const ws = this.ws
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      throw new Error('Codex AppServer is not connected')
     }
-    child.stdin.write(`${JSON.stringify(message)}\n`)
+    ws.send(JSON.stringify(message))
   }
 
   private trySend(message: unknown): void {
@@ -386,12 +400,12 @@ export class CodexRuntime implements AgentRuntime {
   }
 
   private handleExit(error: Error): void {
-    const child = this.child
-    if (!child) {
+    const ws = this.ws
+    if (!ws) {
       return
     }
 
-    this.child = null
+    this.ws = null
 
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)
@@ -422,7 +436,7 @@ export class CodexRuntime implements AgentRuntime {
 
     return {
       ok: true,
-      provider: 'codex',
+      appType: 'codex',
       message,
       version: this.userAgent || undefined,
     }
@@ -436,14 +450,14 @@ export class CodexRuntime implements AgentRuntime {
     if (threadId) {
       await this.request('thread/resume', {
         threadId,
-        cwd: this.app.workingDir,
+        cwd: process.cwd(),
         sandbox: this.connection.sandbox,
         approvalPolicy: this.connection.approvalPolicy,
       })
       await onEvent({ type: 'session', sessionId: threadId })
     } else {
       const result = await this.request<{ thread?: { id?: string } }>('thread/start', {
-        cwd: this.app.workingDir,
+        cwd: process.cwd(),
         sandbox: this.connection.sandbox,
         approvalPolicy: this.connection.approvalPolicy,
         ephemeral: false,
@@ -595,7 +609,7 @@ export class CodexRuntime implements AgentRuntime {
 
   async interrupt(sessionId: string): Promise<void> {
     const turnId = this.activeTurns.get(sessionId)
-    if (!turnId || !this.child) {
+    if (!turnId || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return
     }
     await this.request('turn/interrupt', { threadId: sessionId, turnId })
@@ -622,25 +636,16 @@ export class CodexRuntime implements AgentRuntime {
 
   async close(): Promise<void> {
     this.closed = true
-    const child = this.child
+    const ws = this.ws
     this.handleExit(new Error('Codex runtime closed'))
     this.listeners.clear()
 
-    if (!child) {
-      return
+    if (ws) {
+      try {
+        ws.close()
+      } catch {
+        // already closed
+      }
     }
-
-    child.kill('SIGTERM')
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL')
-        resolve()
-      }, 3000)
-      timer.unref?.()
-      child.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-    })
   }
 }

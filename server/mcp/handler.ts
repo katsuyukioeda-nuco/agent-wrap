@@ -96,7 +96,7 @@ export async function handleMcpRequest(
         },
       })
       const server = new McpServer({
-        name: `agent-wrap/${detail.app.name}`,
+        name: `agent-wrap/${detail.app.id.slice(0, 8)}`,
         version: '0.1.0',
       })
 

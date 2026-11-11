@@ -4,7 +4,8 @@ import type {
   OpencodeConnectedApp,
 } from '../schema'
 
-/** サーバーから Web UI へ流す正規化済みのイベント。 */export type AgentStreamEvent =
+/** サーバーから Web UI へ流す正規化済みのイベント。 */
+export type AgentStreamEvent =
   | { type: 'session'; sessionId: string }
   | { type: 'delta'; text: string }
   | { type: 'reasoning'; text: string }
@@ -15,7 +16,7 @@ import type {
   | { type: 'done'; sessionId: string }
   | { type: 'error'; message: string }
 
-/** API が返す、プロバイダー設定を外部結合した ConnectedApp。 */
+/** API が返す、アプリ種別ごとの設定を外部結合した ConnectedApp。 */
 export interface ConnectedAppDetail {
   app: ConnectedApp
   codex: CodexConnectedApp | null
@@ -24,7 +25,7 @@ export interface ConnectedAppDetail {
 
 export interface AgentTestResult {
   ok: boolean
-  provider: 'codex' | 'opencode'
+  appType: 'codex' | 'opencode'
   message: string
   version?: string
 }
@@ -34,4 +35,10 @@ export interface McpServerSummary {
   status: 'connected' | 'pending' | 'failed' | 'disabled' | 'needs-auth' | 'unknown'
   detail?: string
   toolCount?: number
+}
+
+export interface ConnectionStatus {
+  connected: boolean
+  appType: 'codex' | 'opencode'
+  url?: string | null
 }

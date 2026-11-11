@@ -1,36 +1,36 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Code2, Loader2, TerminalSquare } from 'lucide-react'
-import type { AgentProvider, ConnectedApp } from '../../schema'
+import type { AppType, ConnectedApp } from '../../schema'
 import type { ConnectedAppDetail } from '../../shared/agents'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const choices: Array<{
-  provider: AgentProvider
+  appType: AppType
   label: string
   icon: typeof Code2
 }> = [
-  { provider: 'codex', label: 'Codex', icon: Code2 },
-  { provider: 'opencode', label: 'OpenCode', icon: TerminalSquare },
+  { appType: 'codex', label: 'Codex', icon: Code2 },
+  { appType: 'opencode', label: 'OpenCode', icon: TerminalSquare },
 ]
 
 export default function AppsPage() {
   const navigate = useNavigate()
-  const [connecting, setConnecting] = useState<AgentProvider | null>(null)
+  const [connecting, setConnecting] = useState<AppType | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSelect(provider: AgentProvider): Promise<void> {
+  async function handleSelect(appType: AppType): Promise<void> {
     if (connecting) {
       return
     }
 
-    setConnecting(provider)
+    setConnecting(appType)
     setError(null)
 
     try {
       const apps = await api<ConnectedApp[]>('/apps')
-      const existing = apps.find((app) => app.provider === provider)
+      const existing = apps.find((app) => app.appType === appType)
 
       if (existing) {
         navigate(`/${existing.id}/`)
@@ -39,7 +39,7 @@ export default function AppsPage() {
 
       const detail = await api<ConnectedAppDetail>('/apps', {
         method: 'POST',
-        body: JSON.stringify({ provider }),
+        body: JSON.stringify({ appType }),
       })
       navigate(`/${detail.app.id}/`)
     } catch (selectError) {
@@ -60,13 +60,13 @@ export default function AppsPage() {
         <div className="grid w-full grid-cols-2 gap-4">
           {choices.map((choice) => {
             const Icon = choice.icon
-            const isConnecting = connecting === choice.provider
+            const isConnecting = connecting === choice.appType
 
             return (
               <button
-                key={choice.provider}
+                key={choice.appType}
                 type="button"
-                onClick={() => void handleSelect(choice.provider)}
+                onClick={() => void handleSelect(choice.appType)}
                 disabled={connecting !== null}
                 className={cn(
                   'group bg-background flex h-40 flex-col items-center justify-center gap-4 rounded-xl border shadow-sm transition-all',
