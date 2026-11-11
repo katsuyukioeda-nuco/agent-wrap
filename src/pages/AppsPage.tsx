@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Code2, Loader2, TerminalSquare } from 'lucide-react'
 import type { AppState, AppType, ConnectedApp } from '../../schema'
 import type { ConnectedAppDetail } from '../../shared/agents'
@@ -17,8 +17,6 @@ const choices: Array<{
 
 export default function AppsPage() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const forcePicker = searchParams.get('pick') === '1'
 
   const [apps, setApps] = useState<ConnectedApp[]>([])
   const [lastOpenId, setLastOpenId] = useState<string | null>(null)
@@ -68,13 +66,6 @@ export default function AppsPage() {
     setError(null)
 
     try {
-      const existing = apps.find((app) => app.appType === appType)
-
-      if (existing) {
-        navigate(`/${existing.id}/`)
-        return
-      }
-
       const detail = await api<ConnectedAppDetail>('/apps', {
         method: 'POST',
         body: JSON.stringify({ appType }),
@@ -96,7 +87,7 @@ export default function AppsPage() {
     )
   }
 
-  if (!forcePicker && apps.length > 0) {
+  if (apps.length > 0) {
     const target = apps.find((app) => app.id === lastOpenId)?.id ?? apps[0].id
     return <Navigate to={`/${target}/`} replace />
   }

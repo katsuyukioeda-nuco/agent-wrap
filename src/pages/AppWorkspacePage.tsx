@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, Outlet, useParams } from 'react-router-dom'
+import { Link, Outlet, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Code2,
@@ -7,21 +7,41 @@ import {
   Plus,
   TerminalSquare,
 } from 'lucide-react'
-import type { ConnectedApp } from '../../schema'
+import type { AppType, ConnectedApp } from '../../schema'
 import type { ConnectedAppDetail, ConnectionStatus } from '../../shared/agents'
 import { appTypeLabels } from '@/lib/app'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import ConnectScreen from '@/screens/ConnectScreen'
 
+const addChoices: Array<{
+  appType: AppType
+  label: string
+  icon: typeof Code2
+}> = [
+  { appType: 'codex', label: 'Codex', icon: Code2 },
+  { appType: 'opencode', label: 'OpenCode', icon: TerminalSquare },
+]
+
 export default function AppWorkspacePage() {
   const { appId } = useParams<{ appId: string }>()
+  const navigate = useNavigate()
   const [detail, setDetail] = useState<ConnectedAppDetail | null>(null)
   const [apps, setApps] = useState<ConnectedApp[]>([])
   const [connection, setConnection] = useState<ConnectionStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
+  const [adding, setAdding] = useState<AppType | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!appId) {
@@ -82,6 +102,30 @@ export default function AppWorkspacePage() {
     }
   }, [appId, connection?.connected])
 
+  async function handleAdd(appType: AppType): Promise<void> {
+    if (adding) {
+      return
+    }
+
+    setAdding(appType)
+    setAddError(null)
+
+    try {
+      const created = await api<ConnectedAppDetail>('/apps', {
+        method: 'POST',
+        body: JSON.stringify({ appType }),
+      })
+      setAddOpen(false)
+      navigate(`/${created.app.id}/`)
+    } catch (createError) {
+      setAddError(
+        createError instanceof Error ? createError.message : String(createError),
+      )
+    } finally {
+      setAdding(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -108,51 +152,102 @@ export default function AppWorkspacePage() {
   }
 
   return (
-    <div className="bg-muted/30 min-h-screen">
-      <div className="mx-auto flex min-h-screen w-full max-w-4xl gap-4 px-4 py-6 lg:gap-6 lg:py-10">
-        <aside className="hidden w-14 shrink-0 flex-col items-center gap-2 lg:flex">
-          {apps.map((app) => (
-            <AppRailIcon key={app.id} app={app} active={app.id === appId} />
-          ))}
-          <div className="bg-border my-1 h-px w-8" />
-          <Link
-            to="/?pick=1"
-            title="接続先を選ぶ"
-            aria-label="接続先を選ぶ"
-            className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-11 items-center justify-center rounded-xl border border-dashed transition-colors"
-          >
-            <Plus className="size-5" />
-          </Link>
-        </aside>
-
-        <main className="min-w-0 flex-1">
-          <div className="mb-4 flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden">
+    <Dialog
+      open={addOpen}
+      onOpenChange={(open) => {
+        if (!adding) {
+          setAddOpen(open)
+          if (!open) {
+            setAddError(null)
+          }
+        }
+      }}
+    >
+      <div className="bg-muted/30 min-h-screen">
+        <div className="mx-auto flex min-h-screen w-full max-w-4xl gap-4 px-4 py-6 lg:gap-6 lg:py-10">
+          <aside className="hidden w-14 shrink-0 flex-col items-center gap-2 lg:flex">
             {apps.map((app) => (
-              <AppRailIcon
-                key={app.id}
-                app={app}
-                active={app.id === appId}
-                compact
-              />
+              <AppRailIcon key={app.id} app={app} active={app.id === appId} />
             ))}
-            <Link
-              to="/?pick=1"
-              title="接続先を選ぶ"
-              aria-label="接続先を選ぶ"
-              className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-lg border border-dashed transition-colors"
+            <div className="bg-border my-1 h-px w-8" />
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              title="アプリを追加"
+              aria-label="アプリを追加"
+              className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-11 cursor-pointer items-center justify-center rounded-xl border border-dashed transition-colors"
             >
-              <Plus className="size-4" />
-            </Link>
-          </div>
+              <Plus className="size-5" />
+            </button>
+          </aside>
 
-          {connection?.connected ? (
-            <Outlet context={{ detail, refresh: load }} />
-          ) : (
-            <ConnectScreen detail={detail} />
-          )}
-        </main>
+          <main className="min-w-0 flex-1">
+            <div className="mb-4 flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden">
+              {apps.map((app) => (
+                <AppRailIcon
+                  key={app.id}
+                  app={app}
+                  active={app.id === appId}
+                  compact
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                title="アプリを追加"
+                aria-label="アプリを追加"
+                className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed transition-colors"
+              >
+                <Plus className="size-4" />
+              </button>
+            </div>
+
+            {connection?.connected ? (
+              <Outlet context={{ detail, refresh: load }} />
+            ) : (
+              <ConnectScreen detail={detail} />
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>アプリを追加</DialogTitle>
+          <DialogDescription>どちらを追加しますか？</DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-3">
+          {addChoices.map((choice) => {
+            const Icon = choice.icon
+            const isAdding = adding === choice.appType
+
+            return (
+              <button
+                key={choice.appType}
+                type="button"
+                onClick={() => void handleAdd(choice.appType)}
+                disabled={adding !== null}
+                className={cn(
+                  'bg-background flex h-28 flex-col items-center justify-center gap-3 rounded-lg border transition-colors',
+                  'hover:border-foreground/40',
+                  'disabled:cursor-wait disabled:opacity-60',
+                )}
+              >
+                {isAdding ? (
+                  <Loader2 className="text-muted-foreground size-6 animate-spin" />
+                ) : (
+                  <Icon className="size-6" />
+                )}
+                <span className="font-medium">{choice.label}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {addError && <p className="text-destructive text-sm">{addError}</p>}
+      </DialogContent>
+    </Dialog>
   )
 }
 
