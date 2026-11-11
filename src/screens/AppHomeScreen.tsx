@@ -163,20 +163,18 @@ function VacantLot() {
         aria-hidden="true"
         className="text-foreground/10 pointer-events-none absolute top-full left-1/2 -translate-x-1/2"
         width="280"
-        height="140"
-        viewBox="0 0 280 140"
+        height="120"
+        viewBox="0 0 280 120"
         fill="none"
       >
-        <path d="M136 0 L144 0 L184 46 L176 52 Z" fill="currentColor" />
-        <path d="M158 40 L270 62 L250 110 L138 88 Z" fill="currentColor" />
+        <path
+          d="M140 0 L160 35"
+          stroke="currentColor"
+          strokeWidth="6"
+          strokeLinecap="butt"
+        />
+        <path d="M160 35 L250 53 L270 88 L180 70 Z" fill="currentColor" />
       </svg>
-
-      <div className="border-border w-48 border-t border-dashed" />
-
-      <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-14">
-        <span className="bg-muted-foreground/40 h-3 w-px rotate-12" />
-        <span className="bg-muted-foreground/40 h-2 w-px -rotate-12" />
-      </div>
     </div>
   )
 }
