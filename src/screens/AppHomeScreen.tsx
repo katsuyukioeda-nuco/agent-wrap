@@ -18,7 +18,7 @@ export default function AppHomeScreen() {
 
   return (
     <div
-      className="bg-background relative flex min-h-[60vh] items-center justify-center overflow-hidden rounded-xl border border-dashed"
+      className="bg-background relative flex min-h-[60vh] items-center justify-center overflow-hidden rounded-xl border border-dashed px-6"
       style={{
         backgroundImage:
           'radial-gradient(circle, var(--border) 1px, transparent 1px)',
@@ -142,27 +142,19 @@ function StarRepo() {
       href="https://github.com/katsuyukioeda-nuco/agent-wrap"
       target="_blank"
       rel="noreferrer"
-      className="group bg-background relative flex w-72 flex-col gap-4 rounded-xl border p-4 shadow-md transition-all hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-lg"
+      aria-label="Star katsuyukioeda-nuco/agent-wrap on GitHub"
+      className="group bg-background relative flex w-full max-w-80 items-center justify-between gap-4 rounded-xl border p-4 shadow-md transition-all hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-lg"
     >
-      <div className="flex items-center gap-2">
-        <GitBranch className="size-4" />
-        <span className="text-muted-foreground truncate font-mono text-xs">
+      <div className="flex min-w-0 items-center gap-2">
+        <GitBranch className="size-4 shrink-0" />
+        <span className="text-muted-foreground truncate font-mono text-[11px]">
           katsuyukioeda-nuco/agent-wrap
         </span>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-base font-bold tracking-tight">Star NOW!!</span>
-          <span className="border-border bg-background flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-xs transition-colors group-hover:bg-secondary">
-            <Star className="size-3.5 text-amber-500 transition-transform group-hover:scale-110 group-hover:fill-amber-500" />
-            Star
-          </span>
-        </div>
-        <p className="text-muted-foreground text-[10px]">
-          ※ 無理にとは言いません
-        </p>
-      </div>
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-amber-100 shadow-sm ring-1 ring-amber-200 transition-transform group-hover:scale-110 group-hover:bg-amber-200">
+        <Star className="size-6 fill-amber-500 text-amber-500" />
+      </span>
     </a>
   )
 }
