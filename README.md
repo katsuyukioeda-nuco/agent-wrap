@@ -7,11 +7,12 @@ AI エージェントアプリのラッパー。Codex / OpenCode のハーネス
 ## 体験
 
 1. リポジトリを clone して `npm run dev`
-2. `http://localhost:3000/` を開く
+2. `http://localhost:3000/` を開く（初回は接続先の選択画面）
 3. **Codex** または **OpenCode** を選ぶ
 4. 未接続なら、画面に表示されるプロンプトをエージェントに貼り付ける
 5. 接続されるとプロンプトが消え、`src/screens/AppHomeScreen.tsx` のアプリ画面に切り替わる
-6. あとは `src/screens` や `server/mcp/tools.ts` を直接編集して育てる
+6. 次回以降は `/` を開くと、最後に開いた Connected App へ自動でリダイレクトされる
+7. あとは `src/screens` や `server/mcp/tools.ts` を直接編集して育てる
 
 アプリ名、作業ディレクトリ、モデル、API キー、ポートなどの入力はありません。
 
@@ -70,7 +71,8 @@ opencode serve --service
 
 | URL | 内容 |
 | --- | --- |
-| `/` | 接続先の選択 |
+| `/` | 最後に開いた Connected App へリダイレクト（初回のみ接続先選択） |
+| `/?pick=1` | 接続先の選択画面（アイコンレールの `+` から開く） |
 | `/{appId}/` | アプリ本体（未接続なら接続プロンプト） |
 | `/{appId}/mcp` | アプリ専用 MCP エンドポイント |
 
@@ -129,6 +131,7 @@ export default function MyScreen() {
 | GET | `/api/health` | ヘルスチェック |
 | GET / POST | `/api/apps` | Connected App 一覧 / 作成 |
 | GET / PATCH / DELETE | `/api/apps/:id` | 詳細 / 設定更新 / 削除 |
+| GET / PUT | `/api/app-state` | 最後に開いた Connected App の取得 / 保存 |
 | GET | `/api/apps/:id/connection` | 接続状態 |
 | POST | `/api/apps/:id/connect` | Codex AppServer URL の登録（HTTP フォールバック） |
 | POST | `/api/apps/:id/test` | 接続テスト |
@@ -152,8 +155,11 @@ npm run db:reset     # ボリューム削除 → 再作成 → migrate
 | `connected_apps` | `id`, `appType`, `createdAt`, `updatedAt` |
 | `codex_connected_apps` | `connectedAppId` で接続。binary / sandbox / approval policy / appServerUrl |
 | `opencode_connected_apps` | `connectedAppId` で接続。binary / port |
+| `app_state` | シングルトン。`lastOpenConnectedAppId` を保持 |
 
 `connected_apps.app_type` は `codex` または `opencode` です。
+
+`app_state.last_open_connected_app_id` は最後に開いた Connected App を指します。アプリを開くと `PUT /api/app-state` で更新され、`/` はこの ID の画面へリダイレクトします。アプリが削除されると `ON DELETE SET NULL` でクリアされます。
 
 ### schema.ts の規約
 

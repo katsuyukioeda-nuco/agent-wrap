@@ -51,3 +51,14 @@ export interface OpencodeConnectedApp {
   createdAt: string // ISO8601
   updatedAt: string // ISO8601
 }
+
+/**
+ * アプリ全体の状態。シングルトンとして扱う。
+ * トップ画面は最後に開いた Connected App へリダイレクトする。
+ */
+export interface AppState {
+  id: string // UUIDv7
+  lastOpenConnectedAppId: ConnectedApp['id'] | null
+  createdAt: string // ISO8601
+  updatedAt: string // ISO8601
+}

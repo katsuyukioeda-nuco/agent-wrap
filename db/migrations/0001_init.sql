@@ -50,3 +50,16 @@ CREATE TABLE opencode_connected_apps (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci;
+
+CREATE TABLE app_state (
+  id CHAR(36) NOT NULL,
+  last_open_connected_app_id CHAR(36) NULL,
+  created_at DATETIME(3) NOT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT app_state_last_open_connected_app_id_fkey
+    FOREIGN KEY (last_open_connected_app_id) REFERENCES connected_apps (id)
+    ON DELETE SET NULL
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci;

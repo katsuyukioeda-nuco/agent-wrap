@@ -44,6 +44,11 @@ export default function AppWorkspacePage() {
       setApps(list)
       setConnection(status)
       setError(null)
+
+      void api<void>('/app-state', {
+        method: 'PUT',
+        body: JSON.stringify({ lastOpenConnectedAppId: next.app.id }),
+      }).catch(() => undefined)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError))
     } finally {
@@ -111,7 +116,7 @@ export default function AppWorkspacePage() {
           ))}
           <div className="bg-border my-1 h-px w-8" />
           <Link
-            to="/"
+            to="/?pick=1"
             title="接続先を選ぶ"
             aria-label="接続先を選ぶ"
             className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-11 items-center justify-center rounded-xl border border-dashed transition-colors"
@@ -131,7 +136,7 @@ export default function AppWorkspacePage() {
               />
             ))}
             <Link
-              to="/"
+              to="/?pick=1"
               title="接続先を選ぶ"
               aria-label="接続先を選ぶ"
               className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-lg border border-dashed transition-colors"

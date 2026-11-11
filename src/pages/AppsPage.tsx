@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Code2, Loader2, TerminalSquare } from 'lucide-react'
-import type { AppType, ConnectedApp } from '../../schema'
+import type { AppState, AppType, ConnectedApp } from '../../schema'
 import type { ConnectedAppDetail } from '../../shared/agents'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -17,8 +17,47 @@ const choices: Array<{
 
 export default function AppsPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const forcePicker = searchParams.get('pick') === '1'
+
+  const [apps, setApps] = useState<ConnectedApp[]>([])
+  const [lastOpenId, setLastOpenId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<AppType | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      try {
+        const [appList, state] = await Promise.all([
+          api<ConnectedApp[]>('/apps'),
+          api<AppState>('/app-state'),
+        ])
+        if (!cancelled) {
+          setApps(appList)
+          setLastOpenId(state.lastOpenConnectedAppId)
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error ? loadError.message : String(loadError),
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function handleSelect(appType: AppType): Promise<void> {
     if (connecting) {
@@ -29,7 +68,6 @@ export default function AppsPage() {
     setError(null)
 
     try {
-      const apps = await api<ConnectedApp[]>('/apps')
       const existing = apps.find((app) => app.appType === appType)
 
       if (existing) {
@@ -48,6 +86,19 @@ export default function AppsPage() {
       )
       setConnecting(null)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-muted/30 flex min-h-screen items-center justify-center">
+        <Loader2 className="text-muted-foreground size-5 animate-spin" />
+      </div>
+    )
+  }
+
+  if (!forcePicker && apps.length > 0) {
+    const target = apps.find((app) => app.id === lastOpenId)?.id ?? apps[0].id
+    return <Navigate to={`/${target}/`} replace />
   }
 
   return (
