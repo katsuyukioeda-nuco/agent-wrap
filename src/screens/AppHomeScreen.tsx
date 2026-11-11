@@ -160,7 +160,7 @@ function StarRepo() {
           </span>
           <span className="star-demo-ripple pointer-events-none absolute inset-0 rounded-md border border-foreground" />
         </span>
-        <MousePointer2 className="star-demo-cursor pointer-events-none absolute -right-2 -bottom-2 size-4 fill-white text-foreground drop-shadow" />
+        <MousePointer2 className="star-demo-cursor pointer-events-none absolute top-1/2 left-1/2 -mt-0.5 -ml-0.5 size-4 origin-top-left fill-white text-foreground drop-shadow" />
       </div>
     </a>
   )

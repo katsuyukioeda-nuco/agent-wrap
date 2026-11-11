@@ -176,6 +176,7 @@
 
 .star-demo-cursor {
   animation: star-cursor-demo 4.2s ease-in-out infinite;
+  transform-origin: top left;
 }
 
 .star-demo-button {
