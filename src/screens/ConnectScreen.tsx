@@ -21,15 +21,14 @@ export default function ConnectScreen({
 
   const prompt =
     detail.app.appType === 'codex'
-      ? `agent-wrap に接続してください。
+      ? `このアプリに接続してください。
 
-Codex AppServer の URL: ws://127.0.0.1:4500
-agent-wrap の MCP サーバー: ${url}
+MCP サーバー: ${url}
 
-- Codex AppServer が起動していない場合は起動してください。
-- agent-wrap の MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。
-- MCP ツール connect_codex_app_server に次の引数を渡してください。
-  { "url": "ws://127.0.0.1:4500" }
+- Codex AppServer が起動している場合は、その WebSocket URL を使ってください。
+- 起動していない場合は Codex AppServer を起動し、その WebSocket URL を使ってください。
+- MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。
+- MCP ツール connect_codex_app_server に、使用する Codex AppServer の URL を渡してください。
 
 接続するとこの画面は自動的に切り替わります。`
       : `OpenCode を起動してください。
