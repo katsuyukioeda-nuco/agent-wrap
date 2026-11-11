@@ -120,7 +120,10 @@ export default function AppsPage() {
                 ) : (
                   <AppTypeLogo
                     appType={choice.appType}
-                    className="h-[60px] transition-transform group-hover:scale-105"
+                    className={cn(
+                      'transition-transform group-hover:scale-105',
+                      choice.appType === 'opencode' ? 'h-10' : 'h-[60px]',
+                    )}
                   />
                 )}
                 <span className="text-lg font-medium">{choice.label}</span>

@@ -284,7 +284,7 @@ export default function AppWorkspacePage() {
                 ) : (
                   <AppTypeLogo
                     appType={choice.appType}
-                    className="h-10"
+                    className={choice.appType === 'opencode' ? 'h-8' : 'h-10'}
                   />
                 )}
                 <span className="font-medium">{choice.label}</span>
@@ -316,17 +316,24 @@ function AppRailIcon({
       title={title}
       aria-label={`${title} を開く`}
       className={cn(
-        'flex shrink-0 items-center justify-center border transition-colors',
+        'flex shrink-0 items-center justify-center border bg-background transition-colors',
         compact ? 'size-10 rounded-lg' : 'size-12 rounded-xl',
         active
-          ? 'bg-foreground text-background border-foreground'
-          : 'bg-background text-muted-foreground hover:text-foreground hover:border-foreground/40',
+          ? 'border-2 border-foreground shadow-sm'
+          : 'border-border hover:border-foreground/40',
       )}
     >
       <AppTypeLogo
         appType={app.appType}
-        inverted={active}
-        className={compact ? 'h-[30px]' : 'h-10'}
+        className={
+          compact
+            ? app.appType === 'opencode'
+              ? 'h-4'
+              : 'h-[30px]'
+            : app.appType === 'opencode'
+              ? 'h-6'
+              : 'h-10'
+        }
       />
     </Link>
   )
