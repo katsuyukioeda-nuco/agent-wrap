@@ -1,3 +1,5 @@
 export default function AppHomeScreen() {
-  return <div className="min-h-[60vh] rounded-xl border border-dashed" />
+  return (
+    <div className="bg-background min-h-[60vh] rounded-xl border border-dashed" />
+  )
 }
