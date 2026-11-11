@@ -45,11 +45,8 @@ npm run dev          # http://localhost:3000
 
 | URL | 内容 |
 | --- | --- |
-| `/` | Connected App 一覧・追加 |
-| `/{appId}/` | アプリのトップページ（ここを作り込む） |
-| `/{appId}/chat` | Chat デモ |
-| `/{appId}/todos` | DB CRUD デモ |
-| `/{appId}/mcp-servers` | プロバイダー側の MCP 状態 |
+| `/` | 接続先の選択 |
+| `/{appId}/` | Connected App のトップ（MCP 設定） |
 | `/{appId}/mcp` | アプリ専用 MCP エンドポイント |
 
 ## 接続の仕組み
@@ -80,7 +77,7 @@ Connected App ごとに `codex app-server` を JSON-RPC / stdio で起動しま�
 
 1. `src/screens/MyScreen.tsx` を作る
 2. `src/App.tsx` の `/:appId` 配下にルートを追加
-3. `src/pages/AppWorkspacePage.tsx` の `navItems` にリンクを追加
+3. `AppWorkspacePage` や各画面から、そのルートへのリンクを追加
 
 ```tsx
 import { useApp } from '@/hooks/use-app'
@@ -101,7 +98,9 @@ export default function MyScreen() {
 http://localhost:3000/{appId}/mcp
 ```
 
-公開ツールは `server/mcp/tools.ts` で定義します。現在はデモとして `get_app_info` と `list_todos` が入っています。
+Connected App のトップページに、この URL と **Codex / OpenCode に貼り付けるだけで設定できるプロンプト** を表示しています。
+
+公開ツールは `server/mcp/tools.ts` で定義します。サンプルとして `get_app_info` と `list_todos` が入っています。
 
 ```ts
 server.registerTool(
@@ -246,5 +245,5 @@ schema.ts         アプリケーションスキーマ
 - ローカル利用前提です。認証・認可はありません
 - MCP エンドポイントはアプリサーバー上で公開されます。外部公開しないでください
 - Codex の approval 要求は現状 `decline` で返します。スムーズに動かすには `approvalPolicy: "never"` を使ってください
-- Chat の履歴表示はデモです。永続化や承認 UI は `src/screens/ChatScreen.tsx` を拡張して実装してください
+- 画面は最小構成です。Chat や承認 UI などは `src/screens` に自分で追加してください
 - Codex / OpenCode の API はバージョンで変わる可能性があります。現在は Codex CLI 0.165 / OpenCode 2.2 系で確認しています
