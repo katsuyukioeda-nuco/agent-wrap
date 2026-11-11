@@ -69,7 +69,6 @@ schema.ts                   アプリケーションスキーマ
 - `windows`
 - `dashboard`
 - `chat`
-- `orbit`
 - `terminal`
 - `star`
 - `useless`

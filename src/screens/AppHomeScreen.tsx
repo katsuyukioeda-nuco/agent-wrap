@@ -6,7 +6,6 @@ const patterns = [
   { id: 'windows', Component: StackedWindows },
   { id: 'dashboard', Component: DashboardSkeleton },
   { id: 'chat', Component: ChatSkeleton },
-  { id: 'orbit', Component: Orbit },
   { id: 'terminal', Component: TerminalSkeleton },
   { id: 'star', Component: StarRepo },
   { id: 'useless', Component: UselessArea },
@@ -107,22 +106,6 @@ function ChatSkeleton() {
         <div className="bg-muted h-2 flex-1 rounded-full" />
         <div className="bg-foreground/20 size-5 rounded-full" />
       </div>
-    </div>
-  )
-}
-
-function Orbit() {
-  return (
-    <div className="relative flex size-56 items-center justify-center">
-      <div className="border-border absolute size-56 rounded-full border" />
-      <div className="border-border absolute size-40 rounded-full border" />
-      <div className="border-border absolute size-24 rounded-full border border-dashed" />
-
-      <div className="bg-foreground size-3 rounded-full" />
-
-      <div className="bg-background border-border absolute top-0 left-1/2 size-2.5 -translate-x-1/2 rounded-full border" />
-      <div className="bg-foreground/60 absolute right-6 bottom-8 size-2 rounded-full" />
-      <div className="bg-foreground/30 absolute top-12 left-8 size-2 rounded-full" />
     </div>
   )
 }
