@@ -129,7 +129,6 @@ export default function MyScreen() {
 | Method | Path | 内容 |
 | --- | --- | --- |
 | GET | `/api/health` | ヘルスチェック |
-| GET | `/api/environment` | 実行中のリポジトリパス |
 | GET / POST | `/api/apps` | Connected App 一覧 / 作成 |
 | GET / PATCH / DELETE | `/api/apps/:id` | 詳細 / 設定更新 / 削除 |
 | GET / PUT | `/api/app-state` | 最後に開いた Connected App の取得 / 保存 |
