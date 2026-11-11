@@ -21,18 +21,18 @@ http://localhost:3000 を開き、Codex か OpenCode を選びます。未接続
 agent-wrap は、Codex からは MCP サーバーとして見え、Codex AppServer には WebSocket クライアントとして接続します。
 
 ```text
-  ┌─────────┐            MCP             ┌──────────────────┐
-  │  Codex  │◄──────────────────────────►│    agent-wrap    │
-  │         │        /{appId}/mcp        │      (Hono)      │
-  └─────────┘                              └────┬────────┬────┘
-                                                │        │
-                                WebSocket       │        │  HTTP / SSE
-                                                │        │
-                                       ┌────────▼──┐  ┌──▼─────────┐
-                                       │   Codex   │  │  Browser   │
-                                       │ AppServer │  │ /{appId}/  │
-                                       │  (user)   │  └────────────┘
-                                       └───────────┘
+                    MCP
+  ┌──────────┐                ┌───────────────────────────────────────┐
+  │  Codex   │◄──────────────►│              agent-wrap               │
+  └──────────┘  /{appId}/mcp  │                (Hono)                 │
+                              └─────────┬───────────────────┬─────────┘
+                       WebSocket        │                   │  HTTP / SSE
+                                        │                   │
+                                ┌───────▼────────┐  ┌───────▼────────┐
+                                │     Codex      │  │    Browser     │
+                                │   AppServer    │  │     Web UI     │
+                                │ (user starts)  │  │   /{appId}/    │
+                                └────────────────┘  └────────────────┘
 ```
 
 - Browser は `/{appId}/` の Web UI を開き、agent-wrap の API / SSE で会話を受け取る
