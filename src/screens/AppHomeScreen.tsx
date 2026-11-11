@@ -151,13 +151,8 @@ function StarRepo() {
         </span>
       </div>
 
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-base font-bold tracking-tight">Star NOW!!</span>
-          <span className="text-muted-foreground text-xs">
-            このリポジトリが役に立ったら
-          </span>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-base font-bold tracking-tight">Star NOW!!</span>
         <span className="border-border bg-background flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-xs transition-colors group-hover:bg-secondary">
           <Star className="size-3.5 text-amber-500 transition-transform group-hover:scale-110 group-hover:fill-amber-500" />
           Star
