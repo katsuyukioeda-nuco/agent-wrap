@@ -1,8 +1,8 @@
 # agent-wrap
 
-Codex / OpenCode などの AI エージェントのラッパーを、自分で自由に作るための土台です。
+agent-wrap は、Codex や OpenCode などのエージェントアプリと連動し、それらを自由に拡張したい人のための Web アプリテンプレートで、Codex や OpenCode との連携部など、最低限の機能が最初から入っています。
 
-ハーネスへの接続、Web UI、MCP エンドポイント、DB を最初から用意しています。clone して使うアプリを選んだら、あとは `src/screens` を好きに書き換えるだけ。設定画面はありません。
+クローンして、好きに拡張してください。
 
 ## Quick Start
 
