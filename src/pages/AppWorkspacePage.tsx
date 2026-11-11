@@ -190,7 +190,7 @@ export default function AppWorkspacePage() {
               onClick={() => setAddOpen(true)}
               title="アプリを追加"
               aria-label="アプリを追加"
-              className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-11 cursor-pointer items-center justify-center rounded-xl border border-dashed transition-colors"
+              className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-12 cursor-pointer items-center justify-center rounded-xl border border-dashed transition-colors"
             >
               <Plus className="size-5" />
             </button>
@@ -211,9 +211,9 @@ export default function AppWorkspacePage() {
                 onClick={() => setAddOpen(true)}
                 title="アプリを追加"
                 aria-label="アプリを追加"
-                className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed transition-colors"
+                className="border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed transition-colors"
               >
-                <Plus className="size-4" />
+                <Plus className="size-5" />
               </button>
             </div>
 
@@ -284,7 +284,7 @@ export default function AppWorkspacePage() {
                 ) : (
                   <AppTypeLogo
                     appType={choice.appType}
-                    className="h-8"
+                    className="h-10"
                   />
                 )}
                 <span className="font-medium">{choice.label}</span>
@@ -317,7 +317,7 @@ function AppRailIcon({
       aria-label={`${title} を開く`}
       className={cn(
         'flex shrink-0 items-center justify-center border transition-colors',
-        compact ? 'size-8 rounded-lg' : 'size-11 rounded-xl',
+        compact ? 'size-10 rounded-lg' : 'size-12 rounded-xl',
         active
           ? 'bg-foreground text-background border-foreground'
           : 'bg-background text-muted-foreground hover:text-foreground hover:border-foreground/40',
@@ -326,7 +326,7 @@ function AppRailIcon({
       <AppTypeLogo
         appType={app.appType}
         inverted={active}
-        className={compact ? 'h-4' : 'h-6'}
+        className={compact ? 'h-[30px]' : 'h-10'}
       />
     </Link>
   )
