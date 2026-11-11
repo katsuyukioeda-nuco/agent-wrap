@@ -80,3 +80,101 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+@keyframes star-cursor-demo {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translate(12px, 12px) scale(0.9);
+  }
+  18%,
+  48% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  54% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.8);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  88%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes star-button-demo {
+  0%,
+  50% {
+    transform: scale(1);
+    background-color: var(--background);
+    border-color: var(--border);
+  }
+  56% {
+    transform: scale(0.9);
+    background-color: #fffbeb;
+    border-color: #fcd34d;
+  }
+  64% {
+    transform: scale(1.06);
+  }
+  72%,
+  100% {
+    transform: scale(1);
+    background-color: #fffbeb;
+    border-color: #fcd34d;
+  }
+}
+
+@keyframes star-fill-demo {
+  0%,
+  50% {
+    opacity: 0;
+  }
+  58%,
+  88% {
+    opacity: 1;
+  }
+  98%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.star-demo-cursor {
+  animation: star-cursor-demo 4.2s ease-in-out infinite;
+}
+
+.star-demo-button {
+  animation: star-button-demo 4.2s ease-in-out infinite;
+}
+
+.star-demo-fill {
+  opacity: 0;
+  animation: star-fill-demo 4.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star-demo-cursor {
+    display: none;
+  }
+
+  .star-demo-button {
+    animation: none;
+    background-color: #fffbeb;
+    border-color: #fcd34d;
+  }
+
+  .star-demo-fill {
+    animation: none;
+    opacity: 1;
+  }
+}

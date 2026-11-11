@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GitBranch, Star } from 'lucide-react'
+import { GitBranch, MousePointer2, Star } from 'lucide-react'
 
 const patterns = [
   StackedWindows,
@@ -152,9 +152,15 @@ function StarRepo() {
         </span>
       </div>
 
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-amber-100 shadow-sm ring-1 ring-amber-200 transition-transform group-hover:scale-110 group-hover:bg-amber-200">
-        <Star className="size-6 fill-amber-500 text-amber-500" />
-      </span>
+      <div className="relative shrink-0">
+        <span className="star-demo-button bg-background flex size-9 items-center justify-center rounded-md border shadow-xs">
+          <span className="relative">
+            <Star className="text-muted-foreground size-4" />
+            <Star className="star-demo-fill absolute inset-0 size-4 text-amber-500" />
+          </span>
+        </span>
+        <MousePointer2 className="star-demo-cursor pointer-events-none absolute -right-2 -bottom-2 size-4 fill-white text-foreground drop-shadow" />
+      </div>
     </a>
   )
 }
