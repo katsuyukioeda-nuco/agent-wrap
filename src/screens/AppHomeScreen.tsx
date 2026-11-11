@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { GitBranch, Star } from 'lucide-react'
 
 const patterns = [
   StackedWindows,
@@ -6,6 +7,7 @@ const patterns = [
   ChatSkeleton,
   Orbit,
   TerminalSkeleton,
+  StarRepo,
 ]
 
 export default function AppHomeScreen() {
@@ -16,7 +18,6 @@ export default function AppHomeScreen() {
 
   return (
     <div
-      aria-hidden="true"
       className="bg-background relative flex min-h-[60vh] items-center justify-center overflow-hidden rounded-xl border border-dashed"
       style={{
         backgroundImage:
@@ -132,6 +133,37 @@ function TerminalSkeleton() {
         <div className="mt-1 h-1.5 w-1/4 animate-pulse rounded-full bg-white/60" />
       </div>
     </div>
+  )
+}
+
+function StarRepo() {
+  return (
+    <a
+      href="https://github.com/katsuyukioeda-nuco/agent-wrap"
+      target="_blank"
+      rel="noreferrer"
+      className="group bg-background relative flex w-72 flex-col gap-4 rounded-xl border p-4 shadow-md transition-all hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-lg"
+    >
+      <div className="flex items-center gap-2">
+        <GitBranch className="size-4" />
+        <span className="text-muted-foreground truncate font-mono text-xs">
+          katsuyukioeda-nuco/agent-wrap
+        </span>
+      </div>
+
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-sm font-medium">スターをつけてね</span>
+          <span className="text-muted-foreground text-xs">
+            このリポジトリが役に立ったら
+          </span>
+        </div>
+        <span className="border-border bg-background flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-xs transition-colors group-hover:bg-secondary">
+          <Star className="size-3.5 text-amber-500 transition-transform group-hover:scale-110 group-hover:fill-amber-500" />
+          Star
+        </span>
+      </div>
+    </a>
   )
 }
 
