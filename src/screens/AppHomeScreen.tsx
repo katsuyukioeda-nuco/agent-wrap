@@ -153,11 +153,12 @@ function StarRepo() {
       </div>
 
       <div className="relative shrink-0">
-        <span className="star-demo-button bg-background flex size-9 items-center justify-center rounded-md border shadow-xs">
+        <span className="star-demo-button bg-background relative flex size-9 items-center justify-center rounded-md border shadow-xs">
           <span className="relative">
             <Star className="text-muted-foreground size-4" />
-            <Star className="star-demo-fill absolute inset-0 size-4 text-amber-500" />
+            <Star className="star-demo-fill absolute inset-0 size-4 text-foreground" />
           </span>
+          <span className="star-demo-ripple pointer-events-none absolute inset-0 rounded-md border border-foreground" />
         </span>
         <MousePointer2 className="star-demo-cursor pointer-events-none absolute -right-2 -bottom-2 size-4 fill-white text-foreground drop-shadow" />
       </div>
