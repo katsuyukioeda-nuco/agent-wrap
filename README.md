@@ -1,8 +1,8 @@
 # agent-wrap
 
-**Build your own Codex / OpenCode / etc. wrapper freely.**
+Codex / OpenCode などの AI エージェントのラッパーを、自分で自由に作るための土台です。
 
-Codex / OpenCode のハーネスへの接続、Web UI、MCP エンドポイント、DB を最初から用意した土台です。clone して選んだら、あとは `src/screens` を好きに書き換えるだけ。設定画面はありません。
+ハーネスへの接続、Web UI、MCP エンドポイント、DB を最初から用意しています。clone して使うアプリを選んだら、あとは `src/screens` を好きに書き換えるだけ。設定画面はありません。
 
 ## Quick Start
 
