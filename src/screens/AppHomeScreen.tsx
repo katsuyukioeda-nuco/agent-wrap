@@ -141,15 +141,16 @@ function TerminalSkeleton() {
 function VacantLot() {
   return (
     <div className="relative flex flex-col items-center">
-      <div className="bg-background relative -rotate-1 rounded-sm border-2 border-foreground px-9 py-5 text-center shadow-md">
-        <p className="text-3xl font-bold tracking-[0.2em]">空き地</p>
-        <p className="mt-1 text-sm font-medium tracking-[0.18em]">購入者募集</p>
-        <p className="border-border text-muted-foreground mt-3 border-t pt-2 text-[10px] tracking-wider">
-          用途: 自由
+      <div className="bg-background relative -rotate-1 rounded-sm border-2 border-foreground px-9 py-5 text-center shadow-[0_14px_24px_-12px_rgba(0,0,0,0.45)]">
+        <p className="text-3xl font-bold tracking-[0.14em]">VACANT LOT</p>
+        <p className="mt-1 text-sm font-semibold tracking-[0.24em]">FOR SALE</p>
+        <p className="border-border text-muted-foreground mt-3 border-t pt-2 text-[10px] tracking-[0.18em]">
+          USE: ANY
         </p>
       </div>
 
       <div className="bg-foreground/70 h-16 w-1.5" />
+      <div className="bg-foreground/10 absolute bottom-0 left-1/2 h-4 w-40 -translate-x-1/2 rounded-full blur-md" />
       <div className="border-border w-48 border-t border-dashed" />
 
       <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-14">
