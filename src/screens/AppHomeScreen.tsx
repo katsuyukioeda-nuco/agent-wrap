@@ -8,6 +8,7 @@ const patterns = [
   Orbit,
   TerminalSkeleton,
   StarRepo,
+  UselessArea,
 ]
 
 export default function AppHomeScreen() {
@@ -131,6 +132,23 @@ function TerminalSkeleton() {
         <div className="h-1.5 w-1/2 rounded-full bg-white/20" />
         <div className="h-1.5 w-2/3 rounded-full bg-white/20" />
         <div className="mt-1 h-1.5 w-1/4 animate-pulse rounded-full bg-white/60" />
+      </div>
+    </div>
+  )
+}
+
+function UselessArea() {
+  return (
+    <div className="relative w-full max-w-80 -rotate-2">
+      <div className="bg-muted/70 absolute -top-3 left-1/2 h-6 w-24 -translate-x-1/2 -rotate-3 rounded-sm border" />
+
+      <div className="bg-background w-full rounded-sm border p-6 shadow-md">
+        <p className="text-lg leading-snug font-medium">
+          This area is <span className="underline decoration-dotted underline-offset-4">useless</span>.
+        </p>
+        <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+          Replace it with whatever you want.
+        </p>
       </div>
     </div>
   )
