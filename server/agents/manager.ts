@@ -1,4 +1,5 @@
 import type { ConnectedAppDetail } from '../../shared/agents'
+import { ClaudeRuntime } from './claude'
 import { CodexRuntime } from './codex'
 import { OpenCodeRuntime } from './opencode'
 import type { AgentRuntime } from './types'
@@ -15,6 +16,7 @@ function signature(detail: ConnectedAppDetail): string {
     appType: detail.app.appType,
     codex: detail.codex,
     opencode: detail.opencode,
+    claude: detail.claude,
   })
 }
 
@@ -35,7 +37,9 @@ export async function getRuntime(detail: ConnectedAppDetail): Promise<AgentRunti
   const runtime =
     detail.app.appType === 'codex'
       ? new CodexRuntime(detail)
-      : new OpenCodeRuntime(detail)
+      : detail.app.appType === 'opencode'
+        ? new OpenCodeRuntime(detail)
+        : new ClaudeRuntime(detail)
 
   runtimes.set(key, { runtime, signature: nextSignature })
   return runtime

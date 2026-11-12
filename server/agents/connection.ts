@@ -4,6 +4,7 @@ import type {
   ConnectionStatus,
 } from '../../shared/agents'
 import { getAppDetail, setCodexAppServerUrl } from '../repositories/apps'
+import { getClaudeAuthStatus } from './claude'
 import { getRuntime, stopRuntime } from './manager'
 import { discoverOpenCodeService } from './opencode'
 
@@ -15,6 +16,15 @@ export async function getConnectionStatus(
       connected: Boolean(detail.codex?.appServerUrl),
       appType: 'codex',
       url: detail.codex?.appServerUrl ?? null,
+    }
+  }
+
+  if (detail.app.appType === 'claude') {
+    const auth = await getClaudeAuthStatus(detail.claude?.binary)
+    return {
+      connected: auth.loggedIn,
+      appType: 'claude',
+      url: null,
     }
   }
 

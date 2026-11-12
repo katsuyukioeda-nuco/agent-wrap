@@ -29,7 +29,18 @@ const addChoices: Array<{
 }> = [
   { appType: 'codex', label: 'Codex' },
   { appType: 'opencode', label: 'OpenCode' },
+  { appType: 'claude', label: 'Claude Code' },
 ]
+
+function logoSize(appType: AppType, compact: boolean): string {
+  if (appType === 'codex') {
+    return compact ? 'h-[30px]' : 'h-10'
+  }
+  if (appType === 'opencode') {
+    return compact ? 'h-4' : 'h-6'
+  }
+  return compact ? 'h-5' : 'h-6'
+}
 
 export default function AppWorkspacePage() {
   const { appId } = useParams<{ appId: string }>()
@@ -260,10 +271,10 @@ export default function AppWorkspacePage() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>アプリを追加</DialogTitle>
-          <DialogDescription>どちらを追加しますか？</DialogDescription>
+          <DialogDescription>どれを追加しますか？</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {addChoices.map((choice) => {
             const isAdding = adding === choice.appType
 
@@ -274,7 +285,7 @@ export default function AppWorkspacePage() {
                 onClick={() => void handleAdd(choice.appType)}
                 disabled={adding !== null}
                 className={cn(
-                  'bg-background flex h-28 flex-col items-center justify-center gap-3 rounded-lg border transition-colors',
+                  'bg-background flex h-28 flex-col items-center justify-center gap-3 rounded-lg border px-2 transition-colors',
                   'hover:border-foreground/40',
                   'disabled:cursor-wait disabled:opacity-60',
                 )}
@@ -284,10 +295,10 @@ export default function AppWorkspacePage() {
                 ) : (
                   <AppTypeLogo
                     appType={choice.appType}
-                    className={choice.appType === 'opencode' ? 'h-8' : 'h-10'}
+                    className={choice.appType === 'codex' ? 'h-9' : 'h-7'}
                   />
                 )}
-                <span className="font-medium">{choice.label}</span>
+                <span className="text-sm font-medium">{choice.label}</span>
               </button>
             )
           })}
@@ -325,15 +336,7 @@ function AppRailIcon({
     >
       <AppTypeLogo
         appType={app.appType}
-        className={
-          compact
-            ? app.appType === 'opencode'
-              ? 'h-4'
-              : 'h-[30px]'
-            : app.appType === 'opencode'
-              ? 'h-6'
-              : 'h-10'
-        }
+        className={logoSize(app.appType, compact)}
       />
     </Link>
   )

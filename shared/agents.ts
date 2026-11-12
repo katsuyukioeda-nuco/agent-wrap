@@ -1,4 +1,6 @@
 import type {
+  AppType,
+  ClaudeConnectedApp,
   CodexConnectedApp,
   ConnectedApp,
   OpencodeConnectedApp,
@@ -21,11 +23,12 @@ export interface ConnectedAppDetail {
   app: ConnectedApp
   codex: CodexConnectedApp | null
   opencode: OpencodeConnectedApp | null
+  claude: ClaudeConnectedApp | null
 }
 
 export interface AgentTestResult {
   ok: boolean
-  appType: 'codex' | 'opencode'
+  appType: AppType
   message: string
   version?: string
 }
@@ -39,6 +42,6 @@ export interface McpServerSummary {
 
 export interface ConnectionStatus {
   connected: boolean
-  appType: 'codex' | 'opencode'
+  appType: AppType
   url?: string | null
 }

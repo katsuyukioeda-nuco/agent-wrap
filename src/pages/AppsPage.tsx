@@ -13,6 +13,7 @@ const choices: Array<{
 }> = [
   { appType: 'codex', label: 'Codex' },
   { appType: 'opencode', label: 'OpenCode' },
+  { appType: 'claude', label: 'Claude Code' },
 ]
 
 export default function AppsPage() {
@@ -99,7 +100,7 @@ export default function AppsPage() {
           どちらを使っていますか？
         </h1>
 
-        <div className="grid w-full grid-cols-2 gap-4">
+        <div className="grid w-full grid-cols-3 gap-4">
           {choices.map((choice) => {
             const isConnecting = connecting === choice.appType
 
@@ -122,7 +123,11 @@ export default function AppsPage() {
                     appType={choice.appType}
                     className={cn(
                       'transition-transform group-hover:scale-105',
-                      choice.appType === 'opencode' ? 'h-10' : 'h-[60px]',
+                      choice.appType === 'codex'
+                        ? 'h-[60px]'
+                        : choice.appType === 'opencode'
+                          ? 'h-10'
+                          : 'h-11',
                     )}
                   />
                 )}

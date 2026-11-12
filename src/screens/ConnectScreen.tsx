@@ -27,14 +27,18 @@ MCP サーバー: ${url}
 - 起動していない場合は Codex AppServer を起動し、その WebSocket URL を使ってください。
 - MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。
 - MCP ツール connect_codex_app_server に、使用する Codex AppServer の URL を渡してください。`
-      : `${detail.opencode?.binary ?? 'opencode'} serve --service`
+      : detail.app.appType === 'claude'
+        ? `${detail.claude?.binary ?? 'claude'} auth login`
+        : `${detail.opencode?.binary ?? 'opencode'} serve --service`
 
   const codeLabel =
     detail.app.appType === 'codex' ? 'プロンプト' : 'コマンド'
   const stepTitle =
     detail.app.appType === 'codex'
       ? '以下のプロンプトをCodexに貼り付けます'
-      : '以下のコマンドでOpenCodeを起動します'
+      : detail.app.appType === 'claude'
+        ? '以下のコマンドでClaude Codeにログインします'
+        : '以下のコマンドでOpenCodeを起動します'
 
   async function handleCopy(): Promise<void> {
     try {

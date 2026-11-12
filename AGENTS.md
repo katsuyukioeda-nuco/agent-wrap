@@ -1,6 +1,6 @@
 # AGENTS.md
 
-このリポジトリは、AI エージェントアプリのラッパーです。Codex / OpenCode のハーネスに接続し、独自の Web UI と MCP ツールを載せるための土台になっています。
+このリポジトリは、AI エージェントアプリのラッパーです。Codex / OpenCode / Claude Code のハーネスに接続し、独自の Web UI と MCP ツールを載せるための土台になっています。
 
 ## 作業前提
 
@@ -46,7 +46,7 @@ src/
   lib/                      API / SSE クライアント
 server/
   routes/                   Hono API
-  agents/                   Codex / OpenCode ランタイム
+  agents/                   Codex / OpenCode / Claude Code ランタイム
   repositories/             DB アクセス
   mcp/                      MCP サーバーとツール
   app.ts                    Hono アプリ
@@ -137,6 +137,7 @@ server.registerTool(
 - `connected_apps` — `id`, `appType`, `createdAt`, `updatedAt`
 - `codex_connected_apps` — `connectedAppId`、binary / sandbox / approval policy / appServerUrl
 - `opencode_connected_apps` — `connectedAppId`、binary / port
+- `claude_connected_apps` — `connectedAppId`、binary / permission mode / model
 - `app_state` — シングルトン。`lastOpenConnectedAppId`
 
 `app_state.lastOpenConnectedAppId` は最後に開いた Connected App を保持し、`/` のリダイレクトに使います。アプリ削除時は `ON DELETE SET NULL` でクリアされます。
@@ -154,6 +155,15 @@ server.registerTool(
 - `~/.local/state/opencode/service.json`（`$XDG_STATE_HOME` 配下）を読み、起動中の認証済みサーバーへ接続する
 - サーバーの自動起動はしない
 - セッション作成時に `location: { directory: process.cwd() }` を渡す
+
+### Claude Code
+
+- Codex AppServer / OpenCode Server に相当する待ち受けサーバーは無い
+- `@anthropic-ai/claude-agent-sdk` 経由で `claude` CLI を起動し、streaming input で会話する
+- ログイン状態は `claude auth status --json` で確認する（未ログインなら接続画面に `claude auth login` を出す）
+- 使用する実行ファイルは `claude` の PATH、または `~/.local/bin/claude` などの一般的な場所から解決する
+- アプリ専用 MCP エンドポイントは SDK の `mcpServers` に自動で渡す
+- 権限モードのデフォルトは `bypassPermissions`（ローカル専用前提）。`claude_connected_apps.permission_mode` で変えられる
 
 ## 注意
 

@@ -2,6 +2,7 @@ import type { RowDataPacket } from 'mysql2'
 import { v7 as uuidv7 } from 'uuid'
 import type {
   AppType,
+  ClaudeConnectedApp,
   CodexConnectedApp,
   ConnectedApp,
   OpencodeConnectedApp,
@@ -36,6 +37,16 @@ interface OpencodeRow extends RowDataPacket {
   updatedAt: Date
 }
 
+interface ClaudeRow extends RowDataPacket {
+  id: string
+  connectedAppId: string
+  binaryPath: string | null
+  permissionMode: ClaudeConnectedApp['permissionMode']
+  model: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 const selectApp = `
   SELECT id, app_type AS appType, created_at AS createdAt, updated_at AS updatedAt
   FROM connected_apps
@@ -52,6 +63,12 @@ const selectOpencode = `
   SELECT id, connected_app_id AS connectedAppId, binary_path AS binaryPath, port,
          created_at AS createdAt, updated_at AS updatedAt
   FROM opencode_connected_apps
+`
+
+const selectClaude = `
+  SELECT id, connected_app_id AS connectedAppId, binary_path AS binaryPath, permission_mode AS permissionMode,
+         model, created_at AS createdAt, updated_at AS updatedAt
+  FROM claude_connected_apps
 `
 
 function toApp(row: AppRow): ConnectedApp {
@@ -87,6 +104,18 @@ function toOpencode(row: OpencodeRow): OpencodeConnectedApp {
   }
 }
 
+function toClaude(row: ClaudeRow): ClaudeConnectedApp {
+  return {
+    id: row.id,
+    connectedAppId: row.connectedAppId,
+    binary: row.binaryPath,
+    permissionMode: row.permissionMode,
+    model: row.model,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  }
+}
+
 export interface CreateAppInput {
   appType: AppType
   codex?: {
@@ -98,6 +127,11 @@ export interface CreateAppInput {
     binary: string
     port: number
   }
+  claude?: {
+    binary: string | null
+    permissionMode: ClaudeConnectedApp['permissionMode']
+    model: string | null
+  }
 }
 
 export interface UpdateAppInput {
@@ -105,6 +139,7 @@ export interface UpdateAppInput {
     Pick<CodexConnectedApp, 'binary' | 'sandbox' | 'approvalPolicy'>
   >
   opencode?: Partial<Pick<OpencodeConnectedApp, 'binary' | 'port'>>
+  claude?: Partial<Pick<ClaudeConnectedApp, 'binary' | 'permissionMode' | 'model'>>
 }
 
 export async function listApps(): Promise<ConnectedApp[]> {
@@ -131,17 +166,32 @@ export async function getAppDetail(id: string): Promise<ConnectedAppDetail | nul
       app,
       codex: codexRows[0] ? toCodex(codexRows[0]) : null,
       opencode: null,
+      claude: null,
     }
   }
 
-  const [opencodeRows] = await pool.query<OpencodeRow[]>(
-    `${selectOpencode} WHERE connected_app_id = ?`,
+  if (app.appType === 'opencode') {
+    const [opencodeRows] = await pool.query<OpencodeRow[]>(
+      `${selectOpencode} WHERE connected_app_id = ?`,
+      [id],
+    )
+    return {
+      app,
+      codex: null,
+      opencode: opencodeRows[0] ? toOpencode(opencodeRows[0]) : null,
+      claude: null,
+    }
+  }
+
+  const [claudeRows] = await pool.query<ClaudeRow[]>(
+    `${selectClaude} WHERE connected_app_id = ?`,
     [id],
   )
   return {
     app,
     codex: null,
-    opencode: opencodeRows[0] ? toOpencode(opencodeRows[0]) : null,
+    opencode: null,
+    claude: claudeRows[0] ? toClaude(claudeRows[0]) : null,
   }
 }
 
@@ -175,12 +225,27 @@ export async function createApp(input: CreateAppInput): Promise<ConnectedAppDeta
           now,
         ],
       )
-    } else {
+    } else if (input.appType === 'opencode') {
       await connection.execute(
         `INSERT INTO opencode_connected_apps
            (id, connected_app_id, binary_path, port, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [uuidv7(), id, input.opencode?.binary ?? 'opencode', input.opencode?.port ?? 0, now, now],
+      )
+    } else {
+      await connection.execute(
+        `INSERT INTO claude_connected_apps
+           (id, connected_app_id, binary_path, permission_mode, model, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          uuidv7(),
+          id,
+          input.claude?.binary ?? null,
+          input.claude?.permissionMode ?? 'bypassPermissions',
+          input.claude?.model ?? null,
+          now,
+          now,
+        ],
       )
     }
 
@@ -234,7 +299,7 @@ export async function updateApp(
           id,
         ],
       )
-    } else {
+    } else if (current.app.appType === 'opencode') {
       const settings = current.opencode
       const patch = input.opencode ?? {}
       await connection.execute(
@@ -242,6 +307,21 @@ export async function updateApp(
          SET binary_path = ?, port = ?, updated_at = ?
          WHERE connected_app_id = ?`,
         [patch.binary ?? settings?.binary ?? 'opencode', patch.port ?? settings?.port ?? 0, now, id],
+      )
+    } else {
+      const settings = current.claude
+      const patch = input.claude ?? {}
+      await connection.execute(
+        `UPDATE claude_connected_apps
+         SET binary_path = ?, permission_mode = ?, model = ?, updated_at = ?
+         WHERE connected_app_id = ?`,
+        [
+          patch.binary ?? settings?.binary ?? null,
+          patch.permissionMode ?? settings?.permissionMode ?? 'bypassPermissions',
+          patch.model ?? settings?.model ?? null,
+          now,
+          id,
+        ],
       )
     }
 

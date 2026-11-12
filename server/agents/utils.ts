@@ -22,3 +22,11 @@ export function findFreePort(): Promise<number> {
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
+
+/** MCP エンドポイントの公開 origin。 */
+export function mcpOrigin(): string {
+  return (
+    process.env.MCP_PUBLIC_ORIGIN ??
+    `http://localhost:${process.env.PORT ?? 3000}`
+  )
+}

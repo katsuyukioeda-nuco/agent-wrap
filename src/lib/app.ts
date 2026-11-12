@@ -9,6 +9,7 @@ export interface AppOutletContext {
 export const appTypeLabels: Record<AppType, string> = {
   codex: 'Codex',
   opencode: 'OpenCode',
+  claude: 'Claude Code',
 }
 
 export function mcpUrl(origin: string, appId: string): string {

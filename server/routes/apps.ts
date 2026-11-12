@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { connectCodexAppServer, getConnectionStatus } from '../agents/connection'
 import { getRuntime, stopRuntime } from '../agents/manager'
 import { errorMessage } from '../agents/types'
+import { mcpOrigin } from '../agents/utils'
 import { closeMcpSessionsForApp } from '../mcp/handler'
 import {
   createApp,
@@ -27,13 +28,22 @@ const opencodePatchSchema = z.object({
   port: z.number().int().min(0).max(65535).optional(),
 })
 
+const claudePatchSchema = z.object({
+  binary: z.string().trim().min(1).max(255).nullable().optional(),
+  permissionMode: z
+    .enum(['default', 'acceptEdits', 'plan', 'bypassPermissions'])
+    .optional(),
+  model: z.string().trim().min(1).max(128).nullable().optional(),
+})
+
 const createSchema = z.object({
-  appType: z.enum(['codex', 'opencode']),
+  appType: z.enum(['codex', 'opencode', 'claude']),
 })
 
 const updateSchema = z.object({
   codex: codexPatchSchema.optional(),
   opencode: opencodePatchSchema.optional(),
+  claude: claudePatchSchema.optional(),
 })
 
 const chatSchema = z.object({
@@ -45,11 +55,17 @@ const interruptSchema = z.object({
   sessionId: z.string().trim().min(1).max(255),
 })
 
-function mcpOrigin(): string {
-  return (
-    process.env.MCP_PUBLIC_ORIGIN ??
-    `http://localhost:${process.env.PORT ?? 3000}`
-  )
+function appTypeError(
+  appType: 'codex' | 'opencode' | 'claude',
+): string {
+  switch (appType) {
+    case 'codex':
+      return 'This app is configured for Codex'
+    case 'opencode':
+      return 'This app is configured for OpenCode'
+    case 'claude':
+      return 'This app is configured for Claude Code'
+  }
 }
 
 export const apps = new Hono()
@@ -121,16 +137,19 @@ apps.patch('/:id', async (c) => {
     return c.json({ error: 'Invalid request body', issues: parsed.error.issues }, 400)
   }
 
-  if (current.app.appType === 'codex' && parsed.data.opencode) {
-    return c.json({ error: 'This app is configured for Codex' }, 400)
-  }
-  if (current.app.appType === 'opencode' && parsed.data.codex) {
-    return c.json({ error: 'This app is configured for OpenCode' }, 400)
+  const patches = parsed.data
+  if (
+    (patches.codex && current.app.appType !== 'codex') ||
+    (patches.opencode && current.app.appType !== 'opencode') ||
+    (patches.claude && current.app.appType !== 'claude')
+  ) {
+    return c.json({ error: appTypeError(current.app.appType) }, 400)
   }
 
   const detail = await updateApp(id, {
-    ...(parsed.data.codex ? { codex: parsed.data.codex } : {}),
-    ...(parsed.data.opencode ? { opencode: parsed.data.opencode } : {}),
+    ...(patches.codex ? { codex: patches.codex } : {}),
+    ...(patches.opencode ? { opencode: patches.opencode } : {}),
+    ...(patches.claude ? { claude: patches.claude } : {}),
   })
 
   if (!detail) {

@@ -9,10 +9,10 @@
  *
  * DB の DDL は db/migrations/ に置き、このファイルと手動で同期する。
  */
-export type AppType = 'codex' | 'opencode'
+export type AppType = 'codex' | 'opencode' | 'claude'
 
 /**
- * 接続済みアプリ。ユーザーが Codex / OpenCode を選んで作成する。
+ * 接続済みアプリ。ユーザーが Codex / OpenCode / Claude Code を選んで作成する。
  * 画面（Web UI）はこのアプリの下に追加していく。
  */
 export interface ConnectedApp {
@@ -48,6 +48,22 @@ export interface OpencodeConnectedApp {
   binary: string
   /** 0 の場合は空きポートを自動で確保する。 */
   port: number
+  createdAt: string // ISO8601
+  updatedAt: string // ISO8601
+}
+
+/**
+ * Claude Code 固有の接続設定。ConnectedApp と 1:1。
+ * Claude Code には待ち受けサーバーが無いため、wrapper が CLI プロセスを起動する。
+ */
+export interface ClaudeConnectedApp {
+  id: string // UUIDv7
+  connectedAppId: ConnectedApp['id']
+  /** 使用する claude 実行ファイル。null の場合は SDK 同梱のバイナリを使う。 */
+  binary: string | null
+  permissionMode: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
+  /** 使用するモデル。null の場合は CLI のデフォルト。 */
+  model: string | null
   createdAt: string // ISO8601
   updatedAt: string // ISO8601
 }
