@@ -97,7 +97,7 @@ export default function AppsPage() {
     <div className="bg-muted/30 flex min-h-screen items-center justify-center px-4">
       <div className="flex w-full max-w-lg flex-col items-center gap-8">
         <h1 className="text-center text-2xl font-semibold tracking-tight">
-          どちらを使っていますか？
+          どれを使っていますか？
         </h1>
 
         <div className="grid w-full grid-cols-3 gap-4">
@@ -119,17 +119,19 @@ export default function AppsPage() {
                 {isConnecting ? (
                   <Loader2 className="text-muted-foreground size-7 animate-spin" />
                 ) : (
-                  <AppTypeLogo
-                    appType={choice.appType}
-                    className={cn(
-                      'transition-transform group-hover:scale-105',
-                      choice.appType === 'codex'
-                        ? 'h-[60px]'
-                        : choice.appType === 'opencode'
-                          ? 'h-10'
-                          : 'h-11',
-                    )}
-                  />
+                  <span className="flex h-16 items-center justify-center">
+                    <AppTypeLogo
+                      appType={choice.appType}
+                      className={cn(
+                        'transition-transform group-hover:scale-105',
+                        choice.appType === 'codex'
+                          ? 'h-[60px]'
+                          : choice.appType === 'opencode'
+                            ? 'h-10'
+                            : 'h-11',
+                      )}
+                    />
+                  </span>
                 )}
                 <span className="text-lg font-medium">{choice.label}</span>
               </button>

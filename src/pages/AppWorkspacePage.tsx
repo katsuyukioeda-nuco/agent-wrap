@@ -293,10 +293,12 @@ export default function AppWorkspacePage() {
                 {isAdding ? (
                   <Loader2 className="text-muted-foreground size-6 animate-spin" />
                 ) : (
-                  <AppTypeLogo
-                    appType={choice.appType}
-                    className={choice.appType === 'codex' ? 'h-9' : 'h-7'}
-                  />
+                  <span className="flex h-10 items-center justify-center">
+                    <AppTypeLogo
+                      appType={choice.appType}
+                      className={choice.appType === 'codex' ? 'h-9' : 'h-7'}
+                    />
+                  </span>
                 )}
                 <span className="text-sm font-medium">{choice.label}</span>
               </button>
