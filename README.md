@@ -18,7 +18,7 @@ http://localhost:3000 を開き、Codex か OpenCode を選びます。未接続
 
 ## Architecture
 
-agent-wrap は、Codex からは MCP サーバーとして見え、Codex AppServer には WebSocket クライアントとして接続します。
+以下は Codex との連携例です。agent-wrap は、Codex からは MCP サーバーとして見え、Codex AppServer には WebSocket クライアントとして接続します。
 
 ```text
                     MCP
