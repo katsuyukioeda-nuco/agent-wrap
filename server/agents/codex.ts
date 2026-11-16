@@ -9,7 +9,7 @@ import type {
   SessionEmbed,
   SessionSummary,
 } from '../../shared/agents'
-import type { AgentRuntime, ChatInput, CommentInput } from './types'
+import type { AgentRuntime, ChatInput } from './types'
 import { errorMessage } from './types'
 
 /** `thread/list` が返すスレッド。 */
@@ -667,47 +667,6 @@ export class CodexRuntime implements AgentRuntime {
       return
     }
     await this.request('turn/interrupt', { threadId: sessionId, turnId })
-  }
-
-  async comment({
-    sessionId,
-    text,
-    cwd,
-    filePath,
-    mentionName,
-  }: CommentInput): Promise<void> {
-    await this.ensureStarted()
-
-    await this.request('thread/resume', {
-      threadId: sessionId,
-      cwd: cwd ?? process.cwd(),
-      sandbox: this.connection.sandbox,
-      approvalPolicy: this.connection.approvalPolicy,
-    })
-
-    const input: Array<Record<string, unknown>> = [
-      { type: 'text', text, text_elements: [] },
-    ]
-
-    if (filePath) {
-      input.push({
-        type: 'mention',
-        name: mentionName ?? basename(filePath),
-        path: filePath,
-      })
-    }
-
-    const result = await this.request<{ turn?: { id?: string } }>(
-      'turn/start',
-      {
-        threadId: sessionId,
-        input,
-      },
-    )
-
-    if (typeof result.turn?.id === 'string') {
-      this.activeTurns.set(sessionId, result.turn.id)
-    }
   }
 
   async mcpServers(): Promise<McpServerSummary[]> {

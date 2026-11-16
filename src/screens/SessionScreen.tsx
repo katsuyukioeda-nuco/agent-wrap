@@ -23,10 +23,12 @@ import {
   List,
   ListTree,
   Loader2,
+  MessageSquare,
   MessageSquarePlus,
   RefreshCw,
   X,
 } from 'lucide-react'
+import type { SessionComment } from '../../schema'
 import type {
   GitChangedFile,
   GitRepoSummary,
@@ -122,9 +124,14 @@ export default function SessionScreen() {
   const [commentOpen, setCommentOpen] = useState(false)
   const [commentTarget, setCommentTarget] = useState<CommentTarget | null>(null)
   const [commentText, setCommentText] = useState('')
-  const [commentSending, setCommentSending] = useState(false)
+  const [commentSaving, setCommentSaving] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
-  const editorPaneRef = useRef<HTMLElement | null>(null)
+  const [savedNotice, setSavedNotice] = useState<string | null>(null)
+  const [rightView, setRightView] = useState<'editor' | 'comments'>('editor')
+  const [comments, setComments] = useState<SessionComment[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentsError, setCommentsError] = useState<string | null>(null)
+  const editorPaneRef = useRef<HTMLDivElement | null>(null)
   const selectionPopupRef = useRef<HTMLDivElement | null>(null)
 
   const workspaceBase =
@@ -236,6 +243,44 @@ export default function SessionScreen() {
     }
   }, [appId, sessionId, loadTreeDir, loadDiff])
 
+  const loadComments = useCallback(async () => {
+    if (!appId || !sessionId) {
+      return
+    }
+
+    setCommentsLoading(true)
+    setCommentsError(null)
+
+    try {
+      const result = await api<{ comments: SessionComment[] }>(
+        `/apps/${appId}/sessions/${sessionId}/comments`,
+      )
+      setComments(result.comments)
+    } catch (loadError) {
+      setCommentsError(errorMessage(loadError))
+    } finally {
+      setCommentsLoading(false)
+    }
+  }, [appId, sessionId])
+
+  useEffect(() => {
+    void loadComments()
+  }, [loadComments])
+
+  useEffect(() => {
+    if (rightView !== 'comments') {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      void loadComments()
+    }, 5000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [rightView, loadComments])
+
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null
   const activeFilePath = activeTab?.kind === 'file' ? activeTab.path : null
 
@@ -288,8 +333,15 @@ export default function SessionScreen() {
       : null
 
   const showSelectionPopup = Boolean(
-    !commentOpen && selection?.text.trim() && popupPosition,
+    rightView === 'editor' &&
+      !commentOpen &&
+      selection?.text.trim() &&
+      popupPosition,
   )
+
+  const unresolvedComments = comments.filter(
+    (comment) => !comment.doneAt,
+  ).length
 
   useEffect(() => {
     if (!showSelectionPopup) {
@@ -325,7 +377,7 @@ export default function SessionScreen() {
   }, [activeTabId])
 
   useEffect(() => {
-    if (activeTab?.kind !== 'diff') {
+    if (rightView !== 'editor' || activeTab?.kind !== 'diff') {
       setDiffSelection(null)
       return
     }
@@ -391,7 +443,7 @@ export default function SessionScreen() {
     return () => {
       document.removeEventListener('selectionchange', update)
     }
-  }, [activeTab?.id, activeTab?.kind])
+  }, [activeTab?.id, activeTab?.kind, rightView])
 
   function switchRoot(index: number): void {
     setRootIndex(index)
@@ -545,14 +597,13 @@ export default function SessionScreen() {
       return
     }
 
-    setCommentSending(true)
+    setCommentSaving(true)
     setCommentError(null)
 
     try {
       await api(`/apps/${appId}/sessions/${sessionId}/comments`, {
         method: 'POST',
         body: JSON.stringify({
-          root: rootIndex,
           kind: commentTarget.kind,
           path: commentTarget.path,
           repoPath: commentTarget.repoPath,
@@ -567,10 +618,13 @@ export default function SessionScreen() {
       setCommentOpen(false)
       setCommentText('')
       setCommentTarget(null)
+      setSavedNotice('コメントを保存しました')
+      window.setTimeout(() => setSavedNotice(null), 2000)
+      void loadComments()
     } catch (submitError) {
       setCommentError(errorMessage(submitError))
     } finally {
-      setCommentSending(false)
+      setCommentSaving(false)
     }
   }
 
@@ -768,31 +822,65 @@ export default function SessionScreen() {
               </section>
             </aside>
 
-            <section
-              ref={editorPaneRef}
-              className="flex h-[50vh] min-h-[24rem] flex-col overflow-hidden rounded-xl border md:h-[64vh]"
-            >
-              <EditorTabs
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onActivate={setActiveTabId}
-                onClose={closeTab}
-              />
+            <section className="flex h-[50vh] min-h-[24rem] overflow-hidden rounded-xl border md:h-[64vh]">
+              <div
+                ref={editorPaneRef}
+                className="flex min-w-0 flex-1 flex-col"
+              >
+                {rightView === 'editor' ? (
+                  <>
+                    <EditorTabs
+                      tabs={tabs}
+                      activeTabId={activeTabId}
+                      onActivate={setActiveTabId}
+                      onClose={closeTab}
+                    />
 
-              <EditorViewer
-                tab={activeTab}
-                diff={diff}
-                fileCache={fileCache}
-                fileLoadingPath={fileLoadingPath}
-                fileError={fileError}
-                diffLoading={diffLoading}
-                diffError={diffError}
-                diffMode={diffMode}
-                onDiffModeChange={setDiffMode}
-                onFileSelectionChange={setFileSelection}
-                onReloadFile={reloadActiveFile}
-                onOpenFile={openFileTab}
-              />
+                    <EditorViewer
+                      tab={activeTab}
+                      diff={diff}
+                      fileCache={fileCache}
+                      fileLoadingPath={fileLoadingPath}
+                      fileError={fileError}
+                      diffLoading={diffLoading}
+                      diffError={diffError}
+                      diffMode={diffMode}
+                      onDiffModeChange={setDiffMode}
+                      onFileSelectionChange={setFileSelection}
+                      onReloadFile={reloadActiveFile}
+                      onOpenFile={openFileTab}
+                    />
+                  </>
+                ) : (
+                  <CommentsPanel
+                    comments={comments}
+                    loading={commentsLoading}
+                    error={commentsError}
+                    onRefresh={() => void loadComments()}
+                  />
+                )}
+              </div>
+
+              <aside className="bg-muted/20 flex w-10 shrink-0 flex-col items-center gap-1 border-l p-1">
+                <RailButton
+                  active={rightView === 'editor'}
+                  label="エディタ"
+                  onClick={() => setRightView('editor')}
+                >
+                  <FileText className="size-4" />
+                </RailButton>
+                <RailButton
+                  active={rightView === 'comments'}
+                  label="コメント"
+                  badge={unresolvedComments}
+                  onClick={() => {
+                    setRightView('comments')
+                    void loadComments()
+                  }}
+                >
+                  <MessageSquare className="size-4" />
+                </RailButton>
+              </aside>
             </section>
           </div>
         </>
@@ -824,7 +912,7 @@ export default function SessionScreen() {
       <Dialog
         open={commentOpen}
         onOpenChange={(open) => {
-          if (commentSending) {
+          if (commentSaving) {
             return
           }
           setCommentOpen(open)
@@ -855,6 +943,10 @@ export default function SessionScreen() {
             rows={4}
           />
 
+          <p className="text-muted-foreground text-[11px] leading-relaxed">
+            コメントは保存されます。会話で「コメントを確認して」と伝えると、未対応コメントを取得できます。
+          </p>
+
           {commentError && (
             <p className="text-destructive text-xs break-words">
               {commentError}
@@ -865,20 +957,198 @@ export default function SessionScreen() {
             <Button
               variant="outline"
               onClick={() => setCommentOpen(false)}
-              disabled={commentSending}
+              disabled={commentSaving}
             >
               キャンセル
             </Button>
             <Button
               onClick={() => void submitComment()}
-              disabled={commentSending || !commentText.trim()}
+              disabled={commentSaving || !commentText.trim()}
             >
-              {commentSending ? '送信中…' : '送信'}
+              {commentSaving ? '保存中…' : '保存'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {savedNotice && (
+        <div className="bg-foreground text-background fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-md px-3 py-1.5 text-xs shadow-lg">
+          {savedNotice}
+        </div>
+      )}
     </div>
+  )
+}
+
+function RailButton({
+  active,
+  label,
+  badge,
+  onClick,
+  children,
+}: {
+  active: boolean
+  label: string
+  badge?: number
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
+      className={cn(
+        'relative flex size-8 cursor-pointer items-center justify-center rounded-md transition-colors',
+        active
+          ? 'bg-foreground text-background'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+      )}
+    >
+      {children}
+      {badge !== undefined && badge > 0 && (
+        <span
+          className={cn(
+            'absolute -top-1 -right-1 min-w-4 rounded-full px-1 text-center text-[9px] leading-4',
+            active
+              ? 'bg-background text-foreground'
+              : 'bg-foreground text-background',
+          )}
+        >
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function CommentsPanel({
+  comments,
+  loading,
+  error,
+  onRefresh,
+}: {
+  comments: SessionComment[]
+  loading: boolean
+  error: string | null
+  onRefresh: () => void
+}) {
+  const unresolved = comments.filter((comment) => !comment.doneAt).length
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="text-sm font-semibold tracking-tight">コメント</h2>
+          <span className="text-muted-foreground text-[10px]">
+            {comments.length}
+          </span>
+          {unresolved > 0 && (
+            <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+              {unresolved} 未対応
+            </Badge>
+          )}
+        </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0"
+          aria-label="コメントを更新"
+          title="更新"
+          onClick={onRefresh}
+        >
+          <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+        </Button>
+      </header>
+
+      <p className="text-muted-foreground shrink-0 border-b px-4 py-1.5 text-[10px] leading-relaxed">
+        会話で「コメントを確認して」と伝えると、未対応コメントがエージェントに渡されます。
+      </p>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {loading && comments.length === 0 ? (
+          <InlineSpinner />
+        ) : error ? (
+          <p className="text-muted-foreground p-4 text-xs break-words">
+            {error}
+          </p>
+        ) : comments.length === 0 ? (
+          <div className="flex min-h-40 items-center justify-center p-6 text-center">
+            <p className="text-muted-foreground text-xs">
+              まだコメントはありません。ファイルや差分を選択して追加できます。
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y">
+            {comments.map((comment) => (
+              <CommentItem key={comment.id} comment={comment} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CommentItem({ comment }: { comment: SessionComment }) {
+  const path =
+    comment.repoPath === '.'
+      ? comment.path
+      : `${comment.repoPath}/${comment.path}`
+  const range = comment.startLine
+    ? `:${comment.startLine}${
+        comment.endLine && comment.endLine !== comment.startLine
+          ? `-${comment.endLine}`
+          : ''
+      }`
+    : ''
+  const side =
+    comment.side === 'old'
+      ? '変更前'
+      : comment.side === 'new'
+        ? '変更後'
+        : comment.side === 'both'
+          ? '変更前後'
+          : null
+
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-start gap-2">
+        <MessageSquare className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="max-w-full truncate font-mono text-[11px]">
+              {path}
+              {range}
+            </span>
+            <Badge
+              variant={comment.doneAt ? 'outline' : 'secondary'}
+              className="h-4 px-1 text-[9px]"
+            >
+              {comment.doneAt ? '対応済み' : '未対応'}
+            </Badge>
+          </div>
+
+          <p className="mt-1 text-xs break-words whitespace-pre-wrap">
+            {comment.comment}
+          </p>
+
+          <pre className="bg-muted/40 text-muted-foreground mt-1 max-h-24 overflow-auto rounded border p-2 font-mono text-[10px] break-all whitespace-pre-wrap">
+            {comment.selection}
+          </pre>
+
+          <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-1.5 text-[10px]">
+            <span>{comment.kind === 'diff' ? '差分' : 'ファイル'}</span>
+            {side && <span>· {side}</span>}
+            <span>· {formatRelative(comment.createdAt)}</span>
+          </div>
+        </div>
+      </div>
+    </li>
   )
 }
 
@@ -2062,4 +2332,42 @@ function formatBytes(size: number): string {
     return `${(size / 1024).toFixed(1)} KB`
   }
   return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
+function formatRelative(iso: string | undefined): string {
+  if (!iso) {
+    return ''
+  }
+
+  const time = new Date(iso).getTime()
+  if (Number.isNaN(time)) {
+    return ''
+  }
+
+  const diff = Math.max(0, Date.now() - time)
+  const minutes = Math.floor(diff / 60_000)
+
+  if (minutes < 1) {
+    return 'たった今'
+  }
+  if (minutes < 60) {
+    return `${minutes}分前`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return `${hours}時間前`
+  }
+
+  const days = Math.floor(hours / 24)
+  if (days < 30) {
+    return `${days}日前`
+  }
+
+  const months = Math.floor(days / 30)
+  if (months < 12) {
+    return `${months}か月前`
+  }
+
+  return `${Math.floor(months / 12)}年前`
 }

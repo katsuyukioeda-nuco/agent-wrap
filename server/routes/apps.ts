@@ -1,20 +1,22 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
-import { mkdtemp, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { connectCodexAppServer, getConnectionStatus } from '../agents/connection'
 import { getRuntime, stopRuntime } from '../agents/manager'
 import { errorMessage } from '../agents/types'
 import { mcpOrigin } from '../agents/utils'
 import { closeMcpSessionsForApp } from '../mcp/handler'
 import {
+  createSessionComment,
+  listSessionComments,
+} from '../repositories/comments'
+import {
   listWorkspaceDirectory,
   readWorkspaceFile,
   resolveWorkspaceRoots,
-  workspaceAbsolutePath,
   workspaceDiff,
 } from '../workspace'
 import {
@@ -67,7 +69,6 @@ const interruptSchema = z.object({
 })
 
 const commentSchema = z.object({
-  root: z.number().int().min(0).optional(),
   kind: z.enum(['file', 'diff']),
   path: z.string().trim().min(1).max(2048),
   repoPath: z.string().trim().min(1).max(2048).optional(),
@@ -334,6 +335,34 @@ apps.get('/:id/recent-sessions', async (c) => {
   }
 })
 
+apps.get('/:id/sessions/:sessionId/comments', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json(
+      { error: 'Claude Code ではコメント保存に対応していません' },
+      400,
+    )
+  }
+
+  const rawLimit = Number(c.req.query('limit') ?? '100')
+  const limit = Number.isFinite(rawLimit) ? rawLimit : 100
+
+  try {
+    const comments = await listSessionComments(
+      detail.app.id,
+      c.req.param('sessionId'),
+      limit,
+    )
+    return c.json({ comments })
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+})
+
 apps.post('/:id/sessions/:sessionId/comments', async (c) => {
   const detail = await getAppDetail(c.req.param('id'))
   if (!detail) {
@@ -342,7 +371,7 @@ apps.post('/:id/sessions/:sessionId/comments', async (c) => {
 
   if (detail.app.appType === 'claude') {
     return c.json(
-      { error: 'Claude Code ではコメント送信に対応していません' },
+      { error: 'Claude Code ではコメント保存に対応していません' },
       400,
     )
   }
@@ -360,37 +389,10 @@ apps.post('/:id/sessions/:sessionId/comments', async (c) => {
   const data = parsed.data
   const sessionId = c.req.param('sessionId')
 
-  let roots
-  try {
-    roots = await resolveWorkspaceRoots(detail, sessionId)
-  } catch (error) {
-    return c.json({ error: errorMessage(error) }, 502)
-  }
-
-  const root = selectRoot(
-    roots,
-    data.root === undefined ? undefined : String(data.root),
-  )
-
-  if (!root) {
-    return c.json({ error: 'Workspace not found' }, 404)
-  }
-
   const relativePath =
     data.kind === 'diff' && data.repoPath && data.repoPath !== '.'
       ? `${data.repoPath}/${data.path}`
       : data.path
-
-  let absolutePath: string
-  try {
-    absolutePath = workspaceAbsolutePath(root.path, relativePath)
-  } catch {
-    return c.json({ error: 'Invalid path' }, 400)
-  }
-
-  const sourceExists = await stat(absolutePath)
-    .then((info) => info.isFile())
-    .catch(() => false)
 
   const endLine = data.endLine ?? data.startLine
   const lineLabel = data.startLine
@@ -427,35 +429,25 @@ apps.post('/:id/sessions/:sessionId/comments', async (c) => {
     .join('\n')
 
   try {
-    let attachments:
-      | Array<{ uri: string; name: string; description?: string }>
-      | undefined
+    const directory = await mkdtemp(join(tmpdir(), 'agent-wrap-comment-'))
+    const file = join(directory, 'comment.md')
+    await writeFile(file, message, 'utf8')
 
-    if (detail.app.appType === 'opencode') {
-      const directory = await mkdtemp(join(tmpdir(), 'agent-wrap-comment-'))
-      const file = join(directory, 'comment.md')
-      await writeFile(file, message, 'utf8')
-
-      attachments = [
-        {
-          uri: pathToFileURL(file).href,
-          name: 'comment.md',
-          description: relativePath,
-        },
-      ]
-    }
-
-    const runtime = await getRuntime(detail)
-    await runtime.comment({
+    const comment = await createSessionComment({
+      connectedAppId: detail.app.id,
       sessionId,
-      text: message,
-      cwd: root.path,
-      filePath: sourceExists ? absolutePath : undefined,
-      mentionName: relativePath,
-      attachments,
+      kind: data.kind,
+      path: data.path,
+      repoPath: data.repoPath ?? '.',
+      startLine: data.startLine ?? null,
+      endLine: endLine ?? null,
+      side: data.side ?? null,
+      selection: data.selection,
+      comment: data.comment,
+      attachmentPath: file,
     })
 
-    return c.json({ ok: true })
+    return c.json({ ok: true, comment })
   } catch (error) {
     return c.json({ error: errorMessage(error) }, 502)
   }

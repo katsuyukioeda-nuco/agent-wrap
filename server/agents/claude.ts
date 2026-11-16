@@ -482,10 +482,6 @@ export class ClaudeRuntime implements AgentRuntime {
     await this.current?.interrupt()
   }
 
-  async comment(): Promise<void> {
-    throw new Error('Claude Code ではコメント送信に対応していません')
-  }
-
   async mcpServers(): Promise<McpServerSummary[]> {
     await this.ensureStarted()
 

@@ -15,25 +15,6 @@ export interface ChatInput {
   signal?: AbortSignal
 }
 
-export interface CommentAttachment {
-  uri: string
-  name: string
-  description?: string
-}
-
-export interface CommentInput {
-  sessionId: string
-  text: string
-  /** セッションの作業ディレクトリ。 */
-  cwd?: string
-  /** 選択元のファイルがある場合、その絶対パス。 */
-  filePath?: string
-  /** Codex の mention に表示する名前。 */
-  mentionName?: string
-  /** OpenCode の files 添付。 */
-  attachments?: CommentAttachment[]
-}
-
 export interface AgentRuntime {
   test(): Promise<AgentTestResult>
   chat(input: ChatInput): Promise<void>
@@ -44,7 +25,6 @@ export interface AgentRuntime {
   recentSessions(limit: number): Promise<SessionSummary[]>
   session(sessionId: string): Promise<SessionSummary | null>
   sessionEmbed(sessionId: string): Promise<SessionEmbed>
-  comment(input: CommentInput): Promise<void>
   close(): Promise<void>
 }
 

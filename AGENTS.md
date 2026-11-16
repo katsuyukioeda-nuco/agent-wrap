@@ -104,7 +104,8 @@ schema.ts                   アプリケーションスキーマ
 - 差分ビューアは「分割（split）」と「統合（unified）」をアイコンで切り替えられる
 - 行番号・ハンクヘッダー付きで表示し、コンテキスト行は両方に出す
 - ファイルの内容または差分を選択すると、選択範囲の近くに「コメント」ポップアップを表示する
-- 「コメント」からダイアログを開き、入力してセッションの会話へ送信する
+- 「コメント」からダイアログを開き、コメントを保存する（会話へは送信しない）
+- 右側のアイコンレールからセッションのコメント一覧を開ける
 - 左にファイルツリーと Git 差分を縦積み、右にタブ式のビューアを置く
 - ファイルの内容と差分は右側のタブで切り替える
 - ワークスペースが複数ある場合は上部のボタンで切り替える
@@ -135,11 +136,11 @@ Git 差分は `git status --porcelain -z` で変更ファイルを列挙し、
 ### 選択範囲へのコメント
 
 ファイル内容または Git 差分で選択した範囲にコメントを付け、
-`POST /api/apps/:id/sessions/:sessionId/comments` でセッションの会話へ送ります。
+`POST /api/apps/:id/sessions/:sessionId/comments` で `session_comments` に保存します。
+コメントは会話へ送信せず、選択範囲をまとめた添付ファイルも作成します。
 
 ```json
 {
-  "root": 0,
   "kind": "file",
   "path": "src/App.tsx",
   "startLine": 3,
@@ -149,13 +150,14 @@ Git 差分は `git status --porcelain -z` で変更ファイルを列挙し、
 }
 ```
 
-- OpenCode: `prompt` の `files` に Markdown の添付ファイルを付ける
-- Codex: `turn/start` の `input` に `mention` を付ける
-- Claude Code: コメント送信は非対応（400）
-
-セッション画面では CodeMirror の選択と差分 DOM の選択を検出し、
-選択範囲の近くに「コメント」ポップアップを表示します。
-ポップアップからダイアログを開き、コメントを入力して送信します。
+- `GET /api/apps/:id/sessions/:sessionId/comments` — セッションのコメント一覧（対応済み含む）
+- セッション画面では CodeMirror の選択と差分 DOM の選択を検出し、
+  選択範囲の近くに「コメント」ポップアップを表示する
+- ポップアップからダイアログを開き、コメントを保存する
+- 保存後は右レールの「コメント」から一覧を確認できる
+- エージェントは MCP の `list_comments` で未対応コメントを ID 付きで取得し、
+  対応後に `done_comment` で個別に完了にする
+- Claude Code: コメント保存は非対応（400）
 
 ### OpenCode の埋め込み
 
@@ -218,6 +220,8 @@ server.registerTool(
 - `get_app_info`
 - `connect_codex_app_server`（Codex アプリのみ）
 - `reflect`（Codex / OpenCode）
+- `list_comments`（Codex / OpenCode）
+- `done_comment`（Codex / OpenCode）
 
 `reflect` は呼び出し元のセッション情報から自分のセッション画面 URL を返します。
 
@@ -230,6 +234,11 @@ server.registerTool(
 
 `mcpOrigin()` は `MCP_PUBLIC_ORIGIN`、未設定なら `http://localhost:${PORT}` です。
 セッション情報が無いクライアントには `supported: false` を返します。
+
+`list_comments` は呼び出し元セッションの未対応コメントを ID 付きで返します。
+取得しても完了にはならず、`done_comment` に ID を渡すと `done_at` が設定されます。
+ユーザーが「コメントを確認して」と伝えたら、`list_comments` →
+必要な対応 → `done_comment` の順で使います。
 
 トップ画面は上から順に、次の3つで構成します。
 
@@ -258,6 +267,7 @@ server.registerTool(
 - `opencode_connected_apps` — `connectedAppId`、binary / port
 - `claude_connected_apps` — `connectedAppId`、binary / permission mode / model
 - `app_state` — シングルトン。`lastOpenConnectedAppId`
+- `session_comments` — `connectedAppId`, `sessionId`, path / selection / comment / attachmentPath / `doneAt`
 
 `app_state.lastOpenConnectedAppId` は最後に開いた Connected App を保持し、`/` のリダイレクトに使います。アプリ削除時は `ON DELETE SET NULL` でクリアされます。
 

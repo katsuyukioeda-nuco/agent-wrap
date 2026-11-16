@@ -10,7 +10,7 @@ import type {
   SessionSummary,
 } from '../../shared/agents'
 import { readServerSentEvents, type ServerSentEvent } from './sse'
-import type { AgentRuntime, ChatInput, CommentInput } from './types'
+import type { AgentRuntime, ChatInput } from './types'
 import { delay } from './utils'
 
 interface DiscoveredService {
@@ -510,20 +510,6 @@ export class OpenCodeRuntime implements AgentRuntime {
     await this.ensureStarted()
     await this.request(`/api/session/${encodeURIComponent(sessionId)}/interrupt`, {
       method: 'POST',
-    })
-  }
-
-  async comment({ sessionId, text, attachments }: CommentInput): Promise<void> {
-    await this.ensureStarted()
-
-    const body: Record<string, unknown> = { text }
-    if (attachments && attachments.length > 0) {
-      body.files = attachments
-    }
-
-    await this.json(`/api/session/${encodeURIComponent(sessionId)}/prompt`, {
-      method: 'POST',
-      body: JSON.stringify(body),
     })
   }
 

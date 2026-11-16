@@ -78,3 +78,28 @@ export interface AppState {
   createdAt: string // ISO8601
   updatedAt: string // ISO8601
 }
+
+/**
+ * セッションに保存されたコメント。
+ * MCP の list_comments で未対応分を取得し、done_comment で対応済みにする。
+ */
+export interface SessionComment {
+  id: string // UUIDv7
+  connectedAppId: ConnectedApp['id']
+  /** OpenCode のセッション ID、または Codex の thread ID。 */
+  sessionId: string
+  kind: 'file' | 'diff'
+  /** ワークスペースからの相対パス。 */
+  path: string
+  /** 差分の場合のリポジトリパス。'.' はルート。 */
+  repoPath: string
+  startLine: number | null
+  endLine: number | null
+  side: 'old' | 'new' | 'both' | null
+  selection: string
+  comment: string
+  /** 選択範囲をまとめた添付ファイルの絶対パス。 */
+  attachmentPath: string | null
+  createdAt: string // ISO8601
+  doneAt: string | null // ISO8601
+}
