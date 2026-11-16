@@ -45,3 +45,124 @@ export interface ConnectionStatus {
   appType: AppType
   url?: string | null
 }
+
+/** エージェント側に登録されているプロジェクト。 */
+export interface ProjectSummary {
+  id: string
+  /** ディレクトリの絶対パス。 */
+  path: string
+  /** ディレクトリ名。 */
+  name: string
+  vcs?: string
+  createdAt?: string
+  updatedAt?: string
+  /** 最後にそのプロジェクトで作業した日時。 */
+  lastActiveAt?: string
+  sessionCount?: number
+}
+
+export interface ProjectsResponse {
+  /** このアプリ種別がプロジェクト一覧に対応しているか。 */
+  supported: boolean
+  projects: ProjectSummary[]
+  error?: string
+}
+
+/** プロジェクト配下のセッション（Codex ではスレッド）。 */
+export interface SessionSummary {
+  id: string
+  projectId: string
+  title: string
+  agent?: string
+  model?: string
+  provider?: string
+  /** セッションが実行されたディレクトリ。 */
+  directory?: string
+  createdAt?: string
+  updatedAt?: string
+  status?: 'running' | 'idle' | 'error'
+  outcome?: string
+}
+
+export interface SessionsResponse {
+  supported: boolean
+  sessions: SessionSummary[]
+  error?: string
+}
+
+export interface RecentSessionsResponse {
+  supported: boolean
+  sessions: SessionSummary[]
+  error?: string
+}
+
+/** セッションを外部 UI に埋め込むための情報。 */
+export interface SessionEmbed {
+  /** 埋め込み先の URL。対応していない場合は null。 */
+  url: string | null
+  /** 埋め込めない理由。 */
+  reason?: string
+}
+
+export interface SessionDetailResponse {
+  session: SessionSummary
+  project: ProjectSummary | null
+  embed: SessionEmbed
+}
+
+export interface WorkspaceRoot {
+  id: string
+  path: string
+  name: string
+  git: boolean
+}
+
+export interface WorkspaceInfo {
+  roots: WorkspaceRoot[]
+}
+
+export interface WorkspaceEntry {
+  name: string
+  /** ワークスペースルートからの相対パス。 */
+  path: string
+  type: 'file' | 'directory'
+}
+
+export interface WorkspaceFilesResponse {
+  path: string
+  entries: WorkspaceEntry[]
+}
+
+export interface WorkspaceFileResponse {
+  path: string
+  size: number
+  binary: boolean
+  truncated: boolean
+  content?: string
+}
+
+export interface GitChangedFile {
+  id: string
+  repoPath: string
+  repoLabel: string
+  repoKind: 'root' | 'submodule'
+  /** リポジトリ内の相対パス。 */
+  path: string
+  status: string
+  diff: string
+  untracked: boolean
+  truncated?: boolean
+}
+
+export interface GitRepoSummary {
+  path: string
+  label: string
+  kind: 'root' | 'submodule'
+  branch?: string
+}
+
+export interface WorkspaceDiffResponse {
+  git: boolean
+  repos: GitRepoSummary[]
+  files: GitChangedFile[]
+}

@@ -40,7 +40,8 @@ src/
     AppsPage.tsx            接続先の初回選択
     AppWorkspacePage.tsx    アプリ共通レイアウト・アイコンレール・追加モーダル
   screens/
-    AppHomeScreen.tsx       接続済みアプリのトップ画面（ここを作り込む）
+    AppHomeScreen.tsx       接続済みアプリのトップ画面（プロジェクト→セッションのツリー）
+    SessionScreen.tsx       セッション画面（ワークスペースのファイル / Git差分）
   components/ui/            shadcn/ui
   hooks/use-app.ts          useApp()
   lib/                      API / SSE クライアント
@@ -59,21 +60,87 @@ schema.ts                   アプリケーションスキーマ
 ## URL
 
 - `/` — 最後に開いた Connected App へリダイレクト（アプリが 0 件なら接続先選択）
-- `/{appId}/` — Connected App のトップ画面
+- `/{appId}/` — Connected App のトップ画面（プロジェクト→セッションのツリー）
+- `/{appId}/sessions/{sessionId}` — セッション画面
+- `/{appId}/?project=<projectId>` — ツリーで開くプロジェクトを指定
 - `/{appId}/mcp` — アプリ専用 MCP エンドポイント
 
-## 空キャンバスのパターン確認
+## プロジェクトとセッション
 
-`src/screens/AppHomeScreen.tsx` の空キャンバスはランダム表示です。確認用に `?pattern=<id>` で固定できます。
+トップ画面はプロジェクトを親、セッションを子とするツリーで表示します。
+プロジェクトを開いたときに `GET /api/apps/:id/projects/:projectId/sessions` を読み、
+一度読み込んだセッションは折りたたんでも保持します。
 
-- `windows`
-- `dashboard`
-- `chat`
-- `terminal`
-- `star`
-- `useless`
+データの取得元:
 
-例: `/{appId}/?pattern=star`
+- OpenCode: `/api/project` と `/api/session` を使う。セッションは `projectID` で絞り込む
+- Codex: AppServer の `thread/list` を使う。`projectId` が無い場合は `cwd` でまとめる
+- Claude Code: プロジェクト一覧は `supported: false`
+
+型は `shared/agents.ts` の `ProjectSummary` / `SessionSummary`、
+ランタイム実装は `AgentRuntime.projects()` / `sessions(project)` です。
+プロジェクトのラベルは `path` / `name` / `vcs` / `lastActiveAt` / `sessionCount` を使います。
+
+### 最近の会話
+
+`GET /api/apps/:id/recent-sessions?limit=5` が全プロジェクト横断の最新セッションを返します。
+ランタイムは `AgentRuntime.recentSessions(limit)` です。
+
+- OpenCode: `/api/session` を `updatedAt` 降順に並べる
+- Codex: `thread/list` を `updatedAt` 降順に並べる
+- Claude Code: `supported: false`
+
+トップ画面では「会話を開く」と Projects の間に表示し、行からセッション画面へ遷移します。
+
+## セッション画面
+
+`/{appId}/sessions/{sessionId}` にセッション画面のルートがあります。
+`SessionScreen.tsx` はワークスペースのファイル閲覧と Git 差分を表示します。
+
+- ファイルタブ: ディレクトリを辿り、テキストファイルをプレビューする
+- Git差分タブ: 変更ファイルを一覧し、ファイルごとの差分を表示する
+- 変更ファイルはリスト表示とフォルダツリー表示をアイコンで切り替えられる
+- 差分ビューアは「分割（split）」と「統合（unified）」をアイコンで切り替えられる
+- 行番号・ハンクヘッダー付きで表示し、コンテキスト行は両方に出す
+- 左にファイルツリーと Git 差分を縦積み、右にタブ式のビューアを置く
+- ファイルの内容と差分は右側のタブで切り替える
+- ワークスペースが複数ある場合は上部のボタンで切り替える
+
+### ワークスペース API
+
+- `GET /api/apps/:id/sessions/:sessionId/workspace` — ルート一覧
+- `GET /api/apps/:id/sessions/:sessionId/workspace/files?root=0&path=` — ディレクトリ一覧
+- `GET /api/apps/:id/sessions/:sessionId/workspace/file?root=0&path=` — ファイル内容
+- `GET /api/apps/:id/sessions/:sessionId/workspace/diff?root=0` — Git 差分
+
+ルートはセッションの作業ディレクトリとプロジェクトの canonical パスから作り、
+Git リポジトリなら `git rev-parse --show-toplevel` の結果を使います。
+パスはルート外に出られないよう `realpath` で検証します。
+
+Git 差分は `git status --porcelain -z` で変更ファイルを列挙し、
+ファイルごとに `git diff HEAD` を取得します。未追跡ファイルはフラグ付きで返します。
+`git submodule status --recursive` で見つけたサブモジュールにも同じ処理を行い、
+差分タブではファイル単位で表示します。大きいファイルは先頭 512KB、
+1ファイルあたりの差分は 200KB までに制限します。
+
+`GET /api/apps/:id/sessions/:sessionId` は `session` / `project` / `embed` を返します。
+
+- OpenCode: `embed.url` に OpenCode Web UI の URL が入る
+- Codex: `embed.url` は `null`。AppServer に Web UI が無い
+- Claude Code: セッション画面自体が非対応（400）
+
+### OpenCode の埋め込み
+
+`OpenCodeRuntime.sessionEmbed()` が `POST /api/pair` でコードを作り、
+`GET /auth/connect/:code`（`Accept: application/json`）でセッショントークンに交換します。
+iframe には次の形式で渡します。
+
+```
+{baseUrl}/server/{base64url(baseUrl)}/session/{sessionId}?auth_token={base64url(`${serverKey}:${token}`)}
+```
+
+トークンは `<expiresAt>.<secret>` 形式なので、期限までメモリにキャッシュします。
+Cookie は使わないため、クロスオリジンの iframe でも認証できます。
 
 ## 画面を追加する
 
@@ -122,6 +189,30 @@ server.registerTool(
 
 - `get_app_info`
 - `connect_codex_app_server`（Codex アプリのみ）
+- `reflect`（Codex / OpenCode）
+
+`reflect` は呼び出し元のセッション情報から自分のセッション画面 URL を返します。
+
+- Codex: `_meta["x-codex-turn-metadata"]` の `thread_id` / `turn_id` / `model` / `codex_version`
+- OpenCode: `_meta["ai.opencode/sessionID"]`
+
+```
+{mcpOrigin()}/{appId}/sessions/{sessionId}
+```
+
+`mcpOrigin()` は `MCP_PUBLIC_ORIGIN`、未設定なら `http://localhost:${PORT}` です。
+セッション情報が無いクライアントには `supported: false` を返します。
+
+トップ画面は上から順に、次の3つで構成します。
+
+1. 「会話を開く」領域（主体験）。プロンプトをコピーして会話に貼る
+2. 「最近の会話」領域。全プロジェクト横断の最新セッション
+3. 「プロジェクトごとの会話」ツリー（サブ）。プロンプトで開けない場合の選択UI
+
+「プロンプトをコピー」は、その Connected App の MCP URL と `reflect` の呼び出しを
+案内するプロンプトをクリップボードに入れます。会話に貼り付けると、エージェントが
+`reflect` を呼び、自分の `session.url` を表示します。コピーされるプロンプトは
+常に表示します。UI ではセッションを「会話」と表示し、API や内部名は session のままにします。
 
 ## DB / スキーマ
 

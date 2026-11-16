@@ -1,10 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type {
   AgentTestResult,
   ConnectedAppDetail,
   McpServerSummary,
+  ProjectSummary,
+  SessionEmbed,
+  SessionSummary,
 } from '../../shared/agents'
 import { readServerSentEvents, type ServerSentEvent } from './sse'
 import type { AgentRuntime, ChatInput } from './types'
@@ -79,6 +82,70 @@ interface OpenCodeInfo {
   urls?: string[]
 }
 
+/** OpenCode の `/api/project` が返すプロジェクト。 */
+interface OpenCodeProject {
+  id?: string
+  canonical?: string
+  vcs?: string
+  time?: {
+    created?: number
+    updated?: number
+    active?: number
+  }
+}
+
+/** OpenCode の `/api/session` が返すセッション。 */
+interface OpenCodeSession {
+  id?: string
+  projectID?: string
+  title?: string
+  agent?: string
+  model?: {
+    id?: string
+    providerID?: string
+  }
+  outcome?: string
+  time?: {
+    created?: number
+    updated?: number
+    busy?: number
+    idle?: number
+  }
+  location?: {
+    directory?: string
+  }
+}
+
+function toIso(value: number | undefined): string | undefined {
+  return typeof value === 'number' ? new Date(value).toISOString() : undefined
+}
+
+function toSessionSummary(session: OpenCodeSession): SessionSummary | null {
+  if (typeof session.id !== 'string' || typeof session.projectID !== 'string') {
+    return null
+  }
+
+  const busy = session.time?.busy
+  const idle = session.time?.idle
+  const running =
+    typeof busy === 'number' && (typeof idle !== 'number' || busy > idle)
+
+  return {
+    id: session.id,
+    projectId: session.projectID,
+    title: session.title?.trim() || '無題のセッション',
+    agent: session.agent,
+    model: session.model?.id,
+    provider: session.model?.providerID,
+    directory: session.location?.directory,
+    createdAt: toIso(session.time?.created),
+    updatedAt: toIso(session.time?.updated),
+    status:
+      session.outcome === 'failed' ? 'error' : running ? 'running' : 'idle',
+    outcome: session.outcome,
+  }
+}
+
 interface OpenCodeEventPayload {
   type?: string
   data?: Record<string, unknown>
@@ -110,6 +177,7 @@ export class OpenCodeRuntime implements AgentRuntime {
   private baseUrl: string | null = null
   private authHeader = ''
   private info: OpenCodeInfo | null = null
+  private embedAuth: { token: string; expiresAt: number } | null = null
   private closed = false
 
   constructor(detail: ConnectedAppDetail) {
@@ -460,10 +528,174 @@ export class OpenCodeRuntime implements AgentRuntime {
     }))
   }
 
+  private async allSessions(): Promise<OpenCodeSession[]> {
+    const result = await this.json<{ data?: OpenCodeSession[] }>(
+      '/api/session?limit=500',
+    )
+    return Array.isArray(result.data) ? result.data : []
+  }
+
+  async projects(): Promise<ProjectSummary[]> {
+    await this.ensureStarted()
+
+    const [projects, sessions] = await Promise.all([
+      this.json<OpenCodeProject[]>('/api/project'),
+      this.allSessions(),
+    ])
+
+    const counts = new Map<string, number>()
+    for (const session of sessions) {
+      if (typeof session.projectID === 'string') {
+        counts.set(session.projectID, (counts.get(session.projectID) ?? 0) + 1)
+      }
+    }
+
+    // 同じディレクトリが複数のプロジェクトとして登録されていることがある。
+    // 最後に使われたものを残す。
+    const byPath = new Map<string, ProjectSummary>()
+    for (const project of projects) {
+      if (
+        typeof project.id !== 'string' ||
+        typeof project.canonical !== 'string'
+      ) {
+        continue
+      }
+
+      const candidate: ProjectSummary = {
+        id: project.id,
+        path: project.canonical,
+        name: basename(project.canonical) || project.canonical,
+        vcs: project.vcs,
+        createdAt: toIso(project.time?.created),
+        updatedAt: toIso(project.time?.updated),
+        lastActiveAt: toIso(project.time?.active),
+        sessionCount: counts.get(project.id) ?? 0,
+      }
+
+      const existing = byPath.get(candidate.path)
+      if (
+        !existing ||
+        (candidate.lastActiveAt ?? '') > (existing.lastActiveAt ?? '') ||
+        (!existing.vcs && candidate.vcs)
+      ) {
+        byPath.set(candidate.path, candidate)
+      }
+    }
+
+    return [...byPath.values()].sort((a, b) =>
+      (b.lastActiveAt ?? '').localeCompare(a.lastActiveAt ?? ''),
+    )
+  }
+
+  async sessions(project: ProjectSummary): Promise<SessionSummary[]> {
+    await this.ensureStarted()
+
+    const sessions = await this.allSessions()
+
+    return sessions
+      .map(toSessionSummary)
+      .filter(
+        (session): session is SessionSummary =>
+          session !== null && session.projectId === project.id,
+      )
+      .sort((a, b) =>
+        (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
+      )
+  }
+
+  async recentSessions(limit: number): Promise<SessionSummary[]> {
+    await this.ensureStarted()
+
+    const sessions = await this.allSessions()
+
+    return sessions
+      .map(toSessionSummary)
+      .filter((session): session is SessionSummary => session !== null)
+      .sort((a, b) =>
+        (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
+      )
+      .slice(0, limit)
+  }
+
+  async session(sessionId: string): Promise<SessionSummary | null> {
+    await this.ensureStarted()
+
+    const sessions = await this.allSessions()
+    return (
+      sessions
+        .map(toSessionSummary)
+        .find((session) => session?.id === sessionId) ?? null
+    )
+  }
+
+  /**
+   * ブラウザ埋め込み用のセッション URL。
+   * ペアリングコードをセッショントークンに交換し、auth_token として付ける。
+   */
+  async sessionEmbed(sessionId: string): Promise<SessionEmbed> {
+    await this.ensureStarted()
+
+    const baseUrl = this.baseUrl
+    if (!baseUrl) {
+      throw new Error('OpenCode server is not running')
+    }
+
+    const token = await this.embedToken()
+    const serverKey = Buffer.from(baseUrl).toString('base64url')
+    // OpenCode の auth_token は base64url(`<serverKey>:<sessionToken>`)。
+    const authToken = Buffer.from(`${serverKey}:${token}`).toString(
+      'base64url',
+    )
+
+    return {
+      url: `${baseUrl}/server/${serverKey}/session/${encodeURIComponent(sessionId)}?auth_token=${authToken}`,
+    }
+  }
+
+  private async embedToken(): Promise<string> {
+    const now = Date.now()
+    if (this.embedAuth && this.embedAuth.expiresAt - now > 60_000) {
+      return this.embedAuth.token
+    }
+
+    const pair = await this.json<{ code?: string }>('/api/pair', {
+      method: 'POST',
+      body: '{}',
+    })
+    if (!pair.code) {
+      throw new Error('OpenCode did not return a pairing code')
+    }
+
+    const response = await this.request(
+      `/auth/connect/${encodeURIComponent(pair.code)}`,
+      { headers: { Accept: 'application/json' } },
+    )
+    if (!response.ok) {
+      throw new Error(`OpenCode pairing failed: ${response.status}`)
+    }
+
+    const body = (await response.json()) as { token?: string }
+    if (!body.token) {
+      throw new Error('OpenCode did not return a session token')
+    }
+
+    // トークンは `<expiresAt>.<secret>` の形式。読めない場合は短めに扱う。
+    const expiresAt = Number(body.token.split('.')[0])
+    this.embedAuth = {
+      token: body.token,
+      expiresAt: Number.isFinite(expiresAt)
+        ? expiresAt * 1000
+        : now + 5 * 60_000,
+    }
+
+    return body.token
+  }
+
   async close(): Promise<void> {
     this.closed = true
     this.baseUrl = null
     this.authHeader = ''
     this.info = null
+    this.embedAuth = null
   }
 }

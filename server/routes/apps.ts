@@ -7,6 +7,12 @@ import { errorMessage } from '../agents/types'
 import { mcpOrigin } from '../agents/utils'
 import { closeMcpSessionsForApp } from '../mcp/handler'
 import {
+  listWorkspaceDirectory,
+  readWorkspaceFile,
+  resolveWorkspaceRoots,
+  workspaceDiff,
+} from '../workspace'
+import {
   createApp,
   deleteApp,
   getAppDetail,
@@ -66,6 +72,19 @@ function appTypeError(
     case 'claude':
       return 'This app is configured for Claude Code'
   }
+}
+
+function selectRoot(
+  roots: Awaited<ReturnType<typeof resolveWorkspaceRoots>>,
+  raw: string | undefined,
+) {
+  const index = raw === undefined ? 0 : Number(raw)
+
+  if (!Number.isInteger(index) || index < 0 || index >= roots.length) {
+    return null
+  }
+
+  return roots[index]
 }
 
 export const apps = new Hono()
@@ -212,6 +231,237 @@ apps.get('/:id/mcp-servers', async (c) => {
       },
       502,
     )
+  }
+})
+
+apps.get('/:id/projects', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ supported: false, projects: [] })
+  }
+
+  try {
+    const runtime = await getRuntime(detail)
+    return c.json({ supported: true, projects: await runtime.projects() })
+  } catch (error) {
+    return c.json(
+      { supported: true, projects: [], error: errorMessage(error) },
+      502,
+    )
+  }
+})
+
+apps.get('/:id/projects/:projectId/sessions', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ supported: false, sessions: [] })
+  }
+
+  try {
+    const runtime = await getRuntime(detail)
+    const projects = await runtime.projects()
+    const project = projects.find(
+      (item) => item.id === c.req.param('projectId'),
+    )
+
+    if (!project) {
+      return c.json({ error: 'Project not found' }, 404)
+    }
+
+    return c.json({
+      supported: true,
+      sessions: await runtime.sessions(project),
+    })
+  } catch (error) {
+    return c.json(
+      { supported: true, sessions: [], error: errorMessage(error) },
+      502,
+    )
+  }
+})
+
+apps.get('/:id/recent-sessions', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ supported: false, sessions: [] })
+  }
+
+  const rawLimit = Number(c.req.query('limit') ?? '5')
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(Math.max(Math.trunc(rawLimit), 1), 20)
+    : 5
+
+  try {
+    const runtime = await getRuntime(detail)
+    return c.json({
+      supported: true,
+      sessions: await runtime.recentSessions(limit),
+    })
+  } catch (error) {
+    return c.json(
+      { supported: true, sessions: [], error: errorMessage(error) },
+      502,
+    )
+  }
+})
+
+apps.get('/:id/sessions/:sessionId/workspace', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ error: 'Claude Code ではワークスペースに対応していません' }, 400)
+  }
+
+  try {
+    const roots = await resolveWorkspaceRoots(
+      detail,
+      c.req.param('sessionId'),
+    )
+    return c.json({ roots })
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+})
+
+apps.get('/:id/sessions/:sessionId/workspace/files', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ error: 'Claude Code ではワークスペースに対応していません' }, 400)
+  }
+
+  let roots
+  try {
+    roots = await resolveWorkspaceRoots(detail, c.req.param('sessionId'))
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+
+  const root = selectRoot(roots, c.req.query('root'))
+  if (!root) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    const result = await listWorkspaceDirectory(
+      root.path,
+      c.req.query('path') ?? '',
+    )
+    return c.json(result)
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 400)
+  }
+})
+
+apps.get('/:id/sessions/:sessionId/workspace/file', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ error: 'Claude Code ではワークスペースに対応していません' }, 400)
+  }
+
+  let roots
+  try {
+    roots = await resolveWorkspaceRoots(detail, c.req.param('sessionId'))
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+
+  const root = selectRoot(roots, c.req.query('root'))
+  if (!root) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    const result = await readWorkspaceFile(
+      root.path,
+      c.req.query('path') ?? '',
+    )
+    return c.json(result)
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 400)
+  }
+})
+
+apps.get('/:id/sessions/:sessionId/workspace/diff', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ error: 'Claude Code ではワークスペースに対応していません' }, 400)
+  }
+
+  let roots
+  try {
+    roots = await resolveWorkspaceRoots(detail, c.req.param('sessionId'))
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+
+  const root = selectRoot(roots, c.req.query('root'))
+  if (!root) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    return c.json(await workspaceDiff(root.path))
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+})
+
+apps.get('/:id/sessions/:sessionId', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json(
+      { error: 'Claude Code ではセッションの埋め込み表示に対応していません' },
+      400,
+    )
+  }
+
+  try {
+    const runtime = await getRuntime(detail)
+    const session = await runtime.session(c.req.param('sessionId'))
+
+    if (!session) {
+      return c.json({ error: 'Session not found' }, 404)
+    }
+
+    const projects = await runtime.projects()
+    const project =
+      projects.find((item) => item.id === session.projectId) ?? null
+    const embed = await runtime.sessionEmbed(session.id)
+
+    return c.json({ session, project, embed })
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
   }
 })
 

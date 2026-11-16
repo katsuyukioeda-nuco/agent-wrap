@@ -17,6 +17,9 @@ import type {
   AgentTestResult,
   ConnectedAppDetail,
   McpServerSummary,
+  ProjectSummary,
+  SessionEmbed,
+  SessionSummary,
 } from '../../shared/agents'
 import type { AgentRuntime, ChatInput } from './types'
 import { mcpOrigin } from './utils'
@@ -488,6 +491,26 @@ export class ClaudeRuntime implements AgentRuntime {
       status: status.status,
       detail: status.error,
     }))
+  }
+
+  async projects(): Promise<ProjectSummary[]> {
+    throw new Error('Claude Code ではプロジェクト一覧に対応していません')
+  }
+
+  async sessions(): Promise<SessionSummary[]> {
+    throw new Error('Claude Code ではプロジェクト一覧に対応していません')
+  }
+
+  async recentSessions(): Promise<SessionSummary[]> {
+    throw new Error('Claude Code では会話一覧に対応していません')
+  }
+
+  async session(): Promise<SessionSummary | null> {
+    throw new Error('Claude Code ではセッション一覧に対応していません')
+  }
+
+  async sessionEmbed(): Promise<SessionEmbed> {
+    throw new Error('Claude Code ではセッションの埋め込み表示に対応していません')
   }
 
   async close(): Promise<void> {

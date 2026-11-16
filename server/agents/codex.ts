@@ -1,12 +1,66 @@
+import { basename } from 'node:path'
 import type { CodexConnectedApp } from '../../schema'
 import type {
   AgentStreamEvent,
   AgentTestResult,
   ConnectedAppDetail,
   McpServerSummary,
+  ProjectSummary,
+  SessionEmbed,
+  SessionSummary,
 } from '../../shared/agents'
 import type { AgentRuntime, ChatInput } from './types'
 import { errorMessage } from './types'
+
+/** `thread/list` が返すスレッド。 */
+interface CodexThread {
+  id?: string
+  cwd?: string
+  projectId?: string | null
+  name?: string | null
+  preview?: string
+  model?: string | null
+  modelProvider?: string
+  createdAt?: number
+  updatedAt?: number
+  gitInfo?: {
+    branch?: string | null
+  } | null
+  parentThreadId?: string | null
+  ephemeral?: boolean
+  status?: {
+    type?: string
+  }
+}
+
+function toIsoFromSeconds(value: number | undefined): string | undefined {
+  return typeof value === 'number' ? new Date(value * 1000).toISOString() : undefined
+}
+
+function toThreadSummary(
+  thread: CodexThread,
+  projectId: string,
+): SessionSummary {
+  return {
+    id: String(thread.id),
+    projectId,
+    title:
+      thread.name?.trim() ||
+      thread.preview?.trim().slice(0, 80) ||
+      '無題のスレッド',
+    model: thread.model ?? undefined,
+    provider: thread.modelProvider,
+    directory: thread.cwd,
+    createdAt: toIsoFromSeconds(thread.createdAt),
+    updatedAt: toIsoFromSeconds(thread.updatedAt),
+    status:
+      thread.status?.type === 'active'
+        ? 'running'
+        : thread.status?.type === 'systemError'
+          ? 'error'
+          : 'idle',
+  }
+}
 
 interface RpcMessage {
   id?: number | string
@@ -632,6 +686,143 @@ export class CodexRuntime implements AgentRuntime {
         toolCount: tools ? Object.keys(tools).length : 0,
       }
     })
+  }
+
+  /** AppServer が保持しているスレッドを新しい順に取得する。 */
+  private async listThreads(): Promise<CodexThread[]> {
+    const threads: CodexThread[] = []
+    let cursor: string | undefined
+
+    // 取りこぼしを避けるため、ページングは最大 10 ページまで辿る。
+    for (let page = 0; page < 10; page += 1) {
+      const result = await this.request<{
+        data?: CodexThread[]
+        nextCursor?: string | null
+      }>('thread/list', {
+        limit: 100,
+        sortKey: 'recency_at',
+        sortDirection: 'desc',
+        ...(cursor ? { cursor } : {}),
+      })
+
+      threads.push(...(result.data ?? []))
+
+      if (!result.nextCursor) {
+        break
+      }
+      cursor = result.nextCursor
+    }
+
+    // サブエージェントと一時スレッドは一覧に混ぜない。
+    return threads.filter(
+      (thread) => !thread.parentThreadId && !thread.ephemeral,
+    )
+  }
+
+  async projects(): Promise<ProjectSummary[]> {
+    await this.ensureStarted()
+
+    const threads = await this.listThreads()
+    const projects = new Map<string, ProjectSummary>()
+
+    for (const thread of threads) {
+      if (typeof thread.id !== 'string' || typeof thread.cwd !== 'string') {
+        continue
+      }
+
+      const id =
+        typeof thread.projectId === 'string' && thread.projectId
+          ? thread.projectId
+          : thread.cwd
+      const updatedAt = toIsoFromSeconds(thread.updatedAt)
+      const existing = projects.get(id)
+
+      if (!existing) {
+        projects.set(id, {
+          id,
+          path: thread.cwd,
+          name: basename(thread.cwd) || thread.cwd,
+          vcs: thread.gitInfo ? 'git' : undefined,
+          createdAt: toIsoFromSeconds(thread.createdAt),
+          updatedAt,
+          lastActiveAt: updatedAt,
+          sessionCount: 1,
+        })
+        continue
+      }
+
+      existing.sessionCount = (existing.sessionCount ?? 0) + 1
+      if ((updatedAt ?? '') > (existing.lastActiveAt ?? '')) {
+        existing.lastActiveAt = updatedAt
+        existing.path = thread.cwd
+        existing.name = basename(thread.cwd) || thread.cwd
+      }
+    }
+
+    return [...projects.values()].sort((a, b) =>
+      (b.lastActiveAt ?? '').localeCompare(a.lastActiveAt ?? ''),
+    )
+  }
+
+  async sessions(project: ProjectSummary): Promise<SessionSummary[]> {
+    await this.ensureStarted()
+
+    const threads = await this.listThreads()
+
+    return threads
+      .filter(
+        (thread) =>
+          typeof thread.id === 'string' &&
+          (thread.projectId === project.id || thread.cwd === project.path),
+      )
+      .map((thread) => toThreadSummary(thread, project.id))
+      .sort((a, b) =>
+        (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
+      )
+  }
+
+  async recentSessions(limit: number): Promise<SessionSummary[]> {
+    await this.ensureStarted()
+
+    const threads = await this.listThreads()
+
+    return threads
+      .map((thread) =>
+        toThreadSummary(
+          thread,
+          (typeof thread.projectId === 'string' && thread.projectId) ||
+            thread.cwd ||
+            '',
+        ),
+      )
+      .sort((a, b) =>
+        (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
+      )
+      .slice(0, limit)
+  }
+
+  async session(sessionId: string): Promise<SessionSummary | null> {
+    await this.ensureStarted()
+
+    const threads = await this.listThreads()
+    const thread = threads.find((item) => item.id === sessionId)
+    if (!thread) {
+      return null
+    }
+
+    const projectId =
+      (typeof thread.projectId === 'string' && thread.projectId) ||
+      thread.cwd ||
+      ''
+
+    return toThreadSummary(thread, projectId)
+  }
+
+  async sessionEmbed(): Promise<SessionEmbed> {
+    return {
+      url: null,
+      reason: 'Codex AppServer には埋め込み用の Web UI がありません',
+    }
   }
 
   async close(): Promise<void> {

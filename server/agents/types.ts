@@ -1,5 +1,12 @@
 import type { ConnectedApp } from '../../schema'
-import type { AgentStreamEvent, AgentTestResult, McpServerSummary } from '../../shared/agents'
+import type {
+  AgentStreamEvent,
+  AgentTestResult,
+  McpServerSummary,
+  ProjectSummary,
+  SessionEmbed,
+  SessionSummary,
+} from '../../shared/agents'
 
 export interface ChatInput {
   sessionId?: string
@@ -13,6 +20,11 @@ export interface AgentRuntime {
   chat(input: ChatInput): Promise<void>
   interrupt(sessionId: string): Promise<void>
   mcpServers(): Promise<McpServerSummary[]>
+  projects(): Promise<ProjectSummary[]>
+  sessions(project: ProjectSummary): Promise<SessionSummary[]>
+  recentSessions(limit: number): Promise<SessionSummary[]>
+  session(sessionId: string): Promise<SessionSummary | null>
+  sessionEmbed(sessionId: string): Promise<SessionEmbed>
   close(): Promise<void>
 }
 
