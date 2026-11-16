@@ -103,6 +103,7 @@ schema.ts                   アプリケーションスキーマ
 - 変更ファイルはリスト表示とフォルダツリー表示をアイコンで切り替えられる
 - 差分ビューアは「分割（split）」と「統合（unified）」をアイコンで切り替えられる
 - 行番号・ハンクヘッダー付きで表示し、コンテキスト行は両方に出す
+- ファイルの内容または差分を選択して、セッションの会話にコメントを送れる
 - 左にファイルツリーと Git 差分を縦積み、右にタブ式のビューアを置く
 - ファイルの内容と差分は右側のタブで切り替える
 - ワークスペースが複数ある場合は上部のボタンで切り替える
@@ -129,6 +130,30 @@ Git 差分は `git status --porcelain -z` で変更ファイルを列挙し、
 - OpenCode: `embed.url` に OpenCode Web UI の URL が入る
 - Codex: `embed.url` は `null`。AppServer に Web UI が無い
 - Claude Code: セッション画面自体が非対応（400）
+
+### 選択範囲へのコメント
+
+ファイル内容または Git 差分で選択した範囲にコメントを付け、
+`POST /api/apps/:id/sessions/:sessionId/comments` でセッションの会話へ送ります。
+
+```json
+{
+  "root": 0,
+  "kind": "file",
+  "path": "src/App.tsx",
+  "startLine": 3,
+  "endLine": 5,
+  "selection": "...",
+  "comment": "..."
+}
+```
+
+- OpenCode: `prompt` の `files` に Markdown の添付ファイルを付ける
+- Codex: `turn/start` の `input` に `mention` を付ける
+- Claude Code: コメント送信は非対応（400）
+
+セッション画面では CodeMirror の選択と差分 DOM の選択を検出し、
+コメントボタンからダイアログを開いて送信します。
 
 ### OpenCode の埋め込み
 

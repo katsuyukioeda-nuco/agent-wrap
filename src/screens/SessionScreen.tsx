@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -22,6 +23,7 @@ import {
   List,
   ListTree,
   Loader2,
+  MessageSquarePlus,
   RefreshCw,
   X,
 } from 'lucide-react'
@@ -38,10 +40,20 @@ import type {
 } from '../../shared/agents'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { useApp } from '@/hooks/use-app'
 import { api } from '@/lib/api'
 import { appTypeLabels } from '@/lib/app'
 import { cn } from '@/lib/utils'
+import type { CodeSelection } from '@/components/code-viewer'
 
 const CodeViewer = lazy(() => import('@/components/code-viewer'))
 
@@ -51,6 +63,23 @@ interface EditorTab {
   path: string
   repoPath?: string
   title: string
+}
+
+interface DiffSelection {
+  text: string
+  startLine?: number
+  endLine?: number
+  side?: 'old' | 'new' | 'both'
+}
+
+interface CommentTarget {
+  kind: 'file' | 'diff'
+  path: string
+  repoPath?: string
+  startLine?: number
+  endLine?: number
+  side?: 'old' | 'new' | 'both'
+  text: string
 }
 
 export default function SessionScreen() {
@@ -86,6 +115,15 @@ export default function SessionScreen() {
   >({})
   const [fileLoadingPath, setFileLoadingPath] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
+
+  const [fileSelection, setFileSelection] = useState<CodeSelection | null>(null)
+  const [diffSelection, setDiffSelection] = useState<DiffSelection | null>(null)
+  const [commentOpen, setCommentOpen] = useState(false)
+  const [commentTarget, setCommentTarget] = useState<CommentTarget | null>(null)
+  const [commentText, setCommentText] = useState('')
+  const [commentSending, setCommentSending] = useState(false)
+  const [commentError, setCommentError] = useState<string | null>(null)
+  const editorPaneRef = useRef<HTMLElement | null>(null)
 
   const workspaceBase =
     appId && sessionId
@@ -235,6 +273,81 @@ export default function SessionScreen() {
     }
   }, [activeFilePath, workspaceBase, rootIndex, fileCache])
 
+  const canComment =
+    activeTab?.kind === 'file'
+      ? Boolean(fileSelection?.text.trim())
+      : activeTab?.kind === 'diff'
+        ? Boolean(diffSelection?.text.trim())
+        : false
+
+  useEffect(() => {
+    setFileSelection(null)
+    setDiffSelection(null)
+  }, [activeTabId])
+
+  useEffect(() => {
+    if (activeTab?.kind !== 'diff') {
+      setDiffSelection(null)
+      return
+    }
+
+    const update = () => {
+      const selection = window.getSelection()
+
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        setDiffSelection(null)
+        return
+      }
+
+      const range = selection.getRangeAt(0)
+      const pane = editorPaneRef.current
+
+      if (!pane || !pane.contains(range.commonAncestorContainer)) {
+        setDiffSelection(null)
+        return
+      }
+
+      const text = extractDiffSelectionText(range)
+
+      if (!text.trim()) {
+        setDiffSelection(null)
+        return
+      }
+
+      const start = diffLineInfo(range.startContainer)
+      const end = diffLineInfo(range.endContainer)
+      const oldLines = [start?.old, end?.old].filter(
+        (line): line is number => typeof line === 'number',
+      )
+      const newLines = [start?.new, end?.new].filter(
+        (line): line is number => typeof line === 'number',
+      )
+      const lines = newLines.length > 0 ? newLines : oldLines
+      const side =
+        oldLines.length > 0 && newLines.length > 0
+          ? 'both'
+          : oldLines.length > 0
+            ? 'old'
+            : newLines.length > 0
+              ? 'new'
+              : undefined
+
+      setDiffSelection({
+        text,
+        startLine: lines.length > 0 ? Math.min(...lines) : undefined,
+        endLine: lines.length > 0 ? Math.max(...lines) : undefined,
+        side,
+      })
+    }
+
+    document.addEventListener('selectionchange', update)
+    update()
+
+    return () => {
+      document.removeEventListener('selectionchange', update)
+    }
+  }, [activeTab?.id, activeTab?.kind])
+
   function switchRoot(index: number): void {
     setRootIndex(index)
     setExpanded(new Set())
@@ -336,6 +449,82 @@ export default function SessionScreen() {
       delete next[activeTab.path]
       return next
     })
+  }
+
+  function openCommentDialog(): void {
+    if (!activeTab) {
+      return
+    }
+
+    if (activeTab.kind === 'file') {
+      if (!fileSelection?.text.trim()) {
+        return
+      }
+
+      setCommentTarget({
+        kind: 'file',
+        path: activeTab.path,
+        startLine: fileSelection.fromLine,
+        endLine: fileSelection.toLine,
+        text: fileSelection.text,
+      })
+    } else {
+      const file = diff?.files.find(
+        (item) => `diff:${item.id}` === activeTab.id,
+      )
+
+      if (!file || !diffSelection?.text.trim()) {
+        return
+      }
+
+      setCommentTarget({
+        kind: 'diff',
+        path: file.path,
+        repoPath: file.repoPath,
+        startLine: diffSelection.startLine,
+        endLine: diffSelection.endLine,
+        side: diffSelection.side,
+        text: diffSelection.text,
+      })
+    }
+
+    setCommentText('')
+    setCommentError(null)
+    setCommentOpen(true)
+  }
+
+  async function submitComment(): Promise<void> {
+    if (!appId || !sessionId || !commentTarget || !commentText.trim()) {
+      return
+    }
+
+    setCommentSending(true)
+    setCommentError(null)
+
+    try {
+      await api(`/apps/${appId}/sessions/${sessionId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          root: rootIndex,
+          kind: commentTarget.kind,
+          path: commentTarget.path,
+          repoPath: commentTarget.repoPath,
+          startLine: commentTarget.startLine,
+          endLine: commentTarget.endLine,
+          side: commentTarget.side,
+          selection: commentTarget.text,
+          comment: commentText.trim(),
+        }),
+      })
+
+      setCommentOpen(false)
+      setCommentText('')
+      setCommentTarget(null)
+    } catch (submitError) {
+      setCommentError(errorMessage(submitError))
+    } finally {
+      setCommentSending(false)
+    }
   }
 
   if (loading) {
@@ -532,7 +721,10 @@ export default function SessionScreen() {
               </section>
             </aside>
 
-            <section className="flex h-[50vh] min-h-[24rem] flex-col overflow-hidden rounded-xl border md:h-[64vh]">
+            <section
+              ref={editorPaneRef}
+              className="flex h-[50vh] min-h-[24rem] flex-col overflow-hidden rounded-xl border md:h-[64vh]"
+            >
               <EditorTabs
                 tabs={tabs}
                 activeTabId={activeTabId}
@@ -550,6 +742,9 @@ export default function SessionScreen() {
                 diffError={diffError}
                 diffMode={diffMode}
                 onDiffModeChange={setDiffMode}
+                canComment={canComment}
+                onComment={openCommentDialog}
+                onFileSelectionChange={setFileSelection}
                 onReloadFile={reloadActiveFile}
                 onOpenFile={openFileTab}
               />
@@ -557,6 +752,64 @@ export default function SessionScreen() {
           </div>
         </>
       )}
+
+      <Dialog
+        open={commentOpen}
+        onOpenChange={(open) => {
+          if (commentSending) {
+            return
+          }
+          setCommentOpen(open)
+          if (!open) {
+            setCommentError(null)
+            setCommentTarget(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>選択範囲にコメント</DialogTitle>
+            <DialogDescription>
+              {commentTarget ? commentTargetLabel(commentTarget) : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          {commentTarget && (
+            <pre className="bg-muted/50 text-muted-foreground max-h-40 overflow-auto rounded-lg border p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all">
+              {commentTarget.text}
+            </pre>
+          )}
+
+          <Textarea
+            value={commentText}
+            onChange={(event) => setCommentText(event.target.value)}
+            placeholder="この範囲についてのコメント"
+            rows={4}
+          />
+
+          {commentError && (
+            <p className="text-destructive text-xs break-words">
+              {commentError}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCommentOpen(false)}
+              disabled={commentSending}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={() => void submitComment()}
+              disabled={commentSending || !commentText.trim()}
+            >
+              {commentSending ? '送信中…' : '送信'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -1068,6 +1321,9 @@ function EditorViewer({
   diffError,
   diffMode,
   onDiffModeChange,
+  canComment,
+  onComment,
+  onFileSelectionChange,
   onReloadFile,
   onOpenFile,
 }: {
@@ -1080,6 +1336,9 @@ function EditorViewer({
   diffError: string | null
   diffMode: 'split' | 'unified'
   onDiffModeChange: (mode: 'split' | 'unified') => void
+  canComment: boolean
+  onComment: () => void
+  onFileSelectionChange: (selection: CodeSelection | null) => void
   onReloadFile: () => void
   onOpenFile: (path: string) => void
 }) {
@@ -1157,6 +1416,19 @@ function EditorViewer({
             variant="ghost"
             size="icon"
             className="size-7 shrink-0"
+            aria-label="選択範囲にコメント"
+            title={canComment ? '選択範囲にコメント' : '範囲を選択してください'}
+            disabled={!canComment}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={onComment}
+          >
+            <MessageSquarePlus className="size-3.5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0"
             aria-label="ファイルの内容を開く"
             title="内容を開く"
             onClick={() =>
@@ -1226,6 +1498,18 @@ function EditorViewer({
           variant="ghost"
           size="icon"
           className="size-7 shrink-0"
+          aria-label="選択範囲にコメント"
+          title={canComment ? '選択範囲にコメント' : '範囲を選択してください'}
+          disabled={!canComment}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onComment}
+        >
+          <MessageSquarePlus className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0"
           aria-label="ファイルを再読み込み"
           title="再読み込み"
           onClick={onReloadFile}
@@ -1249,7 +1533,11 @@ function EditorViewer({
           )}
           <div className="min-h-0 flex-1 overflow-hidden">
             <Suspense fallback={<InlineSpinner />}>
-              <CodeViewer path={file.path} value={file.content ?? ''} />
+              <CodeViewer
+                path={file.path}
+                value={file.content ?? ''}
+                onSelectionChange={onFileSelectionChange}
+              />
             </Suspense>
           </div>
         </>
@@ -1543,6 +1831,9 @@ function DiffViewer({
 function UnifiedLine({ line }: { line: DiffLine }) {
   return (
     <div
+      data-diff-line
+      data-old-line={line.oldNumber ?? ''}
+      data-new-line={line.newNumber ?? ''}
       className={cn(
         'flex',
         line.kind === 'add' && 'bg-emerald-500/5',
@@ -1565,6 +1856,7 @@ function UnifiedLine({ line }: { line: DiffLine }) {
         {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
       </span>
       <span
+        data-diff-text
         className={cn(
           'min-w-0 flex-1 pr-3 whitespace-pre-wrap break-all',
           line.kind === 'add' && 'text-emerald-700',
@@ -1593,7 +1885,12 @@ function SplitCell({
   const isDel = line.kind === 'del'
 
   return (
-    <div className="flex min-w-0">
+    <div
+      data-diff-line
+      data-old-line={side === 'old' ? (number ?? '') : ''}
+      data-new-line={side === 'new' ? (number ?? '') : ''}
+      className="flex min-w-0"
+    >
       <span className="text-muted-foreground w-10 shrink-0 pr-2 text-right tabular-nums">
         {number ?? ''}
       </span>
@@ -1607,6 +1904,7 @@ function SplitCell({
         {isAdd ? '+' : isDel ? '-' : ' '}
       </span>
       <span
+        data-diff-text
         className={cn(
           'min-w-0 flex-1 pr-3 whitespace-pre-wrap break-all',
           isAdd && 'text-emerald-700',
@@ -1625,6 +1923,49 @@ function InlineSpinner() {
       <Loader2 className="text-muted-foreground size-4 animate-spin" />
     </div>
   )
+}
+
+function diffLineInfo(
+  node: Node,
+): { old?: number; new?: number } | null {
+  const element = node instanceof Element ? node : node.parentElement
+  const row = element?.closest<HTMLElement>('[data-diff-line]')
+
+  if (!row) {
+    return null
+  }
+
+  return {
+    old: row.dataset.oldLine ? Number(row.dataset.oldLine) : undefined,
+    new: row.dataset.newLine ? Number(row.dataset.newLine) : undefined,
+  }
+}
+
+function extractDiffSelectionText(range: Range): string {
+  const container = document.createElement('div')
+  container.appendChild(range.cloneContents())
+
+  const parts = [
+    ...container.querySelectorAll<HTMLElement>('[data-diff-text]'),
+  ].map((element) => element.textContent ?? '')
+
+  return (parts.length > 0 ? parts.join('\n') : range.toString()).trim()
+}
+
+function commentTargetLabel(target: CommentTarget): string {
+  const path =
+    target.repoPath && target.repoPath !== '.'
+      ? `${target.repoPath}/${target.path}`
+      : target.path
+  const range = target.startLine
+    ? `:${target.startLine}${
+        target.endLine && target.endLine !== target.startLine
+          ? `-${target.endLine}`
+          : ''
+      }`
+    : ''
+
+  return `${target.kind === 'diff' ? '差分' : 'ファイル'} ${path}${range}`
 }
 
 function statusLabel(status: string): string {

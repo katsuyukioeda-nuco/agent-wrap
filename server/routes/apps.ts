@@ -1,6 +1,10 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
+import { mkdtemp, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { connectCodexAppServer, getConnectionStatus } from '../agents/connection'
 import { getRuntime, stopRuntime } from '../agents/manager'
 import { errorMessage } from '../agents/types'
@@ -10,6 +14,7 @@ import {
   listWorkspaceDirectory,
   readWorkspaceFile,
   resolveWorkspaceRoots,
+  workspaceAbsolutePath,
   workspaceDiff,
 } from '../workspace'
 import {
@@ -59,6 +64,18 @@ const chatSchema = z.object({
 
 const interruptSchema = z.object({
   sessionId: z.string().trim().min(1).max(255),
+})
+
+const commentSchema = z.object({
+  root: z.number().int().min(0).optional(),
+  kind: z.enum(['file', 'diff']),
+  path: z.string().trim().min(1).max(2048),
+  repoPath: z.string().trim().min(1).max(2048).optional(),
+  startLine: z.number().int().min(1).optional(),
+  endLine: z.number().int().min(1).optional(),
+  side: z.enum(['old', 'new', 'both']).optional(),
+  selection: z.string().min(1).max(200_000),
+  comment: z.string().trim().min(1).max(20_000),
 })
 
 function appTypeError(
@@ -314,6 +331,133 @@ apps.get('/:id/recent-sessions', async (c) => {
       { supported: true, sessions: [], error: errorMessage(error) },
       502,
     )
+  }
+})
+
+apps.post('/:id/sessions/:sessionId/comments', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json(
+      { error: 'Claude Code ではコメント送信に対応していません' },
+      400,
+    )
+  }
+
+  const body = await c.req.json().catch(() => null)
+  const parsed = commentSchema.safeParse(body)
+
+  if (!parsed.success) {
+    return c.json(
+      { error: 'Invalid request body', issues: parsed.error.issues },
+      400,
+    )
+  }
+
+  const data = parsed.data
+  const sessionId = c.req.param('sessionId')
+
+  let roots
+  try {
+    roots = await resolveWorkspaceRoots(detail, sessionId)
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+
+  const root = selectRoot(
+    roots,
+    data.root === undefined ? undefined : String(data.root),
+  )
+
+  if (!root) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  const relativePath =
+    data.kind === 'diff' && data.repoPath && data.repoPath !== '.'
+      ? `${data.repoPath}/${data.path}`
+      : data.path
+
+  let absolutePath: string
+  try {
+    absolutePath = workspaceAbsolutePath(root.path, relativePath)
+  } catch {
+    return c.json({ error: 'Invalid path' }, 400)
+  }
+
+  const sourceExists = await stat(absolutePath)
+    .then((info) => info.isFile())
+    .catch(() => false)
+
+  const endLine = data.endLine ?? data.startLine
+  const lineLabel = data.startLine
+    ? `行: ${data.startLine}${
+        endLine && endLine !== data.startLine ? `-${endLine}` : ''
+      }`
+    : null
+  const sideLabel =
+    data.side === 'old'
+      ? '変更前'
+      : data.side === 'new'
+        ? '変更後'
+        : data.side === 'both'
+          ? '変更前後'
+          : null
+
+  const message = [
+    '選択範囲へのコメント',
+    '',
+    `ファイル: ${relativePath}`,
+    lineLabel,
+    `種類: ${data.kind === 'diff' ? '差分' : 'ファイル内容'}`,
+    sideLabel ? `対象: ${sideLabel}` : null,
+    '',
+    'コメント:',
+    data.comment,
+    '',
+    '選択範囲:',
+    '````text',
+    data.selection,
+    '````',
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n')
+
+  try {
+    let attachments:
+      | Array<{ uri: string; name: string; description?: string }>
+      | undefined
+
+    if (detail.app.appType === 'opencode') {
+      const directory = await mkdtemp(join(tmpdir(), 'agent-wrap-comment-'))
+      const file = join(directory, 'comment.md')
+      await writeFile(file, message, 'utf8')
+
+      attachments = [
+        {
+          uri: pathToFileURL(file).href,
+          name: 'comment.md',
+          description: relativePath,
+        },
+      ]
+    }
+
+    const runtime = await getRuntime(detail)
+    await runtime.comment({
+      sessionId,
+      text: message,
+      cwd: root.path,
+      filePath: sourceExists ? absolutePath : undefined,
+      mentionName: relativePath,
+      attachments,
+    })
+
+    return c.json({ ok: true })
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
   }
 })
 

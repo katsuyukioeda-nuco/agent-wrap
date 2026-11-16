@@ -148,11 +148,26 @@ async function resolveInsideRoot(
   return realTarget
 }
 
+/** ルート配下の絶対パスを作る。存在しないファイル（削除済みなど）にも使える。 */
+export function workspaceAbsolutePath(root: string, input: string): string {
+  if (input.includes('\0')) {
+    throw new Error('Invalid path')
+  }
+
+  const target = resolve(root, input || '.')
+  const relativeTarget = relative(root, target)
+
+  if (relativeTarget.startsWith('..') || isAbsolute(relativeTarget)) {
+    throw new Error('Invalid path')
+  }
+
+  return target
+}
+
 export async function listWorkspaceDirectory(
   root: string,
   input: string,
-): Promise<{ path: string; entries: WorkspaceEntry[] }> {
-  const directory = await resolveInsideRoot(root, input)
+): Promise<{ path: string; entries: WorkspaceEntry[] }> {  const directory = await resolveInsideRoot(root, input)
   const dirents = await readdir(directory, { withFileTypes: true })
 
   const entries: WorkspaceEntry[] = []
