@@ -155,6 +155,8 @@ Git 差分は `git status --porcelain -z` で変更ファイルを列挙し、
   選択範囲の近くに「コメント」ポップアップを表示する
 - ポップアップからダイアログを開き、コメントを保存する
 - 保存後は右レールの「コメント」から一覧を確認できる
+- コメントタブと保存ダイアログには、OpenCode なら `/agent-wrap:check_comments`、
+  Codex なら「コメントを確認して」と案内する
 - エージェントは MCP の `list_comments` で未対応コメントを ID 付きで取得し、
   対応後に `done_comment` で個別に完了にする
 - Claude Code: コメント保存は非対応（400）
@@ -239,6 +241,18 @@ server.registerTool(
 取得しても完了にはならず、`done_comment` に ID を渡すと `done_at` が設定されます。
 ユーザーが「コメントを確認して」と伝えたら、`list_comments` →
 必要な対応 → `done_comment` の順で使います。
+
+### MCP プロンプト
+
+`registerPrompt` で `check_comments` を公開しています。
+コメント確認の手順（`reflect` → `list_comments` → 対応 → `done_comment`）を
+ユーザーメッセージとして返すので、クライアント側でスラッシュコマンドとして呼べます。
+
+- OpenCode: `agent-wrap:check_comments`（サーバー名が前置される）。
+  UI では `/agent-wrap:check_comments` と表示する
+- OpenCode のコマンド API は `POST /api/session/:id/command` に
+  `{ "name": "agent-wrap:check_comments", "text": "" }` を送る（`text` は必須）
+- Codex: MCP プロンプト未対応のため、自然言語の「コメントを確認して」で案内する
 
 トップ画面は上から順に、次の3つで構成します。
 

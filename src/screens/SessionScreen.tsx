@@ -856,6 +856,11 @@ export default function SessionScreen() {
                     comments={comments}
                     loading={commentsLoading}
                     error={commentsError}
+                    commandHint={
+                      detail.app.appType === 'opencode'
+                        ? '/agent-wrap:check_comments'
+                        : null
+                    }
                     onRefresh={() => void loadComments()}
                   />
                 )}
@@ -944,7 +949,18 @@ export default function SessionScreen() {
           />
 
           <p className="text-muted-foreground text-[11px] leading-relaxed">
-            コメントは保存されます。会話で「コメントを確認して」と伝えると、未対応コメントを取得できます。
+            コメントは保存されます。
+            {detail.app.appType === 'opencode' ? (
+              <>
+                会話で{' '}
+                <code className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">
+                  /agent-wrap:check_comments
+                </code>{' '}
+                と送ると、未対応コメントを確認できます。
+              </>
+            ) : (
+              '会話で「コメントを確認して」と伝えると、未対応コメントを取得できます。'
+            )}
           </p>
 
           {commentError && (
@@ -1028,11 +1044,13 @@ function CommentsPanel({
   comments,
   loading,
   error,
+  commandHint,
   onRefresh,
 }: {
   comments: SessionComment[]
   loading: boolean
   error: string | null
+  commandHint: string | null
   onRefresh: () => void
 }) {
   const unresolved = comments.filter((comment) => !comment.doneAt).length
@@ -1064,9 +1082,19 @@ function CommentsPanel({
         </Button>
       </header>
 
-      <p className="text-muted-foreground shrink-0 border-b px-4 py-1.5 text-[10px] leading-relaxed">
-        会話で「コメントを確認して」と伝えると、未対応コメントがエージェントに渡されます。
-      </p>
+      {commandHint ? (
+        <p className="text-muted-foreground shrink-0 border-b px-4 py-1.5 text-[10px] leading-relaxed">
+          会話で{' '}
+          <code className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">
+            {commandHint}
+          </code>{' '}
+          と送ると、未対応コメントの確認を依頼できます。
+        </p>
+      ) : (
+        <p className="text-muted-foreground shrink-0 border-b px-4 py-1.5 text-[10px] leading-relaxed">
+          会話で「コメントを確認して」と伝えると、未対応コメントがエージェントに渡されます。
+        </p>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading && comments.length === 0 ? (
