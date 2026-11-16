@@ -70,6 +70,7 @@ interface DiffSelection {
   startLine?: number
   endLine?: number
   side?: 'old' | 'new' | 'both'
+  rect?: { left: number; top: number; bottom: number }
 }
 
 interface CommentTarget {
@@ -124,6 +125,7 @@ export default function SessionScreen() {
   const [commentSending, setCommentSending] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
   const editorPaneRef = useRef<HTMLElement | null>(null)
+  const selectionPopupRef = useRef<HTMLDivElement | null>(null)
 
   const workspaceBase =
     appId && sessionId
@@ -273,12 +275,49 @@ export default function SessionScreen() {
     }
   }, [activeFilePath, workspaceBase, rootIndex, fileCache])
 
-  const canComment =
+  const selection =
     activeTab?.kind === 'file'
-      ? Boolean(fileSelection?.text.trim())
+      ? fileSelection
       : activeTab?.kind === 'diff'
-        ? Boolean(diffSelection?.text.trim())
-        : false
+        ? diffSelection
+        : null
+
+  const popupPosition =
+    selection?.rect && selection.rect.bottom > 0
+      ? selectionPopupPosition(selection.rect)
+      : null
+
+  const showSelectionPopup = Boolean(
+    !commentOpen && selection?.text.trim() && popupPosition,
+  )
+
+  useEffect(() => {
+    if (!showSelectionPopup) {
+      return
+    }
+
+    const hide = () => {
+      setFileSelection(null)
+      setDiffSelection(null)
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (selectionPopupRef.current?.contains(event.target as Node)) {
+        return
+      }
+      hide()
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('scroll', hide, true)
+    window.addEventListener('resize', hide)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('scroll', hide, true)
+      window.removeEventListener('resize', hide)
+    }
+  }, [showSelectionPopup])
 
   useEffect(() => {
     setFileSelection(null)
@@ -308,6 +347,7 @@ export default function SessionScreen() {
       }
 
       const text = extractDiffSelectionText(range)
+      const bounds = range.getBoundingClientRect()
 
       if (!text.trim()) {
         setDiffSelection(null)
@@ -337,6 +377,11 @@ export default function SessionScreen() {
         startLine: lines.length > 0 ? Math.min(...lines) : undefined,
         endLine: lines.length > 0 ? Math.max(...lines) : undefined,
         side,
+        rect: {
+          left: bounds.left,
+          top: bounds.top,
+          bottom: bounds.bottom,
+        },
       })
     }
 
@@ -491,6 +536,8 @@ export default function SessionScreen() {
     setCommentText('')
     setCommentError(null)
     setCommentOpen(true)
+    setFileSelection(null)
+    setDiffSelection(null)
   }
 
   async function submitComment(): Promise<void> {
@@ -742,8 +789,6 @@ export default function SessionScreen() {
                 diffError={diffError}
                 diffMode={diffMode}
                 onDiffModeChange={setDiffMode}
-                canComment={canComment}
-                onComment={openCommentDialog}
                 onFileSelectionChange={setFileSelection}
                 onReloadFile={reloadActiveFile}
                 onOpenFile={openFileTab}
@@ -751,6 +796,29 @@ export default function SessionScreen() {
             </section>
           </div>
         </>
+      )}
+
+      {showSelectionPopup && popupPosition && (
+        <div
+          ref={selectionPopupRef}
+          style={{
+            position: 'fixed',
+            left: popupPosition.left,
+            top: popupPosition.top,
+            zIndex: 50,
+          }}
+          className="bg-background rounded-lg border p-1 shadow-lg"
+        >
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={openCommentDialog}
+            className="hover:bg-muted flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
+          >
+            <MessageSquarePlus className="size-3.5" />
+            コメント
+          </button>
+        </div>
       )}
 
       <Dialog
@@ -1321,8 +1389,6 @@ function EditorViewer({
   diffError,
   diffMode,
   onDiffModeChange,
-  canComment,
-  onComment,
   onFileSelectionChange,
   onReloadFile,
   onOpenFile,
@@ -1336,8 +1402,6 @@ function EditorViewer({
   diffError: string | null
   diffMode: 'split' | 'unified'
   onDiffModeChange: (mode: 'split' | 'unified') => void
-  canComment: boolean
-  onComment: () => void
   onFileSelectionChange: (selection: CodeSelection | null) => void
   onReloadFile: () => void
   onOpenFile: (path: string) => void
@@ -1416,19 +1480,6 @@ function EditorViewer({
             variant="ghost"
             size="icon"
             className="size-7 shrink-0"
-            aria-label="選択範囲にコメント"
-            title={canComment ? '選択範囲にコメント' : '範囲を選択してください'}
-            disabled={!canComment}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={onComment}
-          >
-            <MessageSquarePlus className="size-3.5" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 shrink-0"
             aria-label="ファイルの内容を開く"
             title="内容を開く"
             onClick={() =>
@@ -1494,18 +1545,6 @@ function EditorViewer({
         <span className="text-muted-foreground shrink-0 text-[10px] tabular-nums">
           {formatBytes(file.size)}
         </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 shrink-0"
-          aria-label="選択範囲にコメント"
-          title={canComment ? '選択範囲にコメント' : '範囲を選択してください'}
-          disabled={!canComment}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onComment}
-        >
-          <MessageSquarePlus className="size-3.5" />
-        </Button>
         <Button
           variant="ghost"
           size="icon"
@@ -1923,6 +1962,25 @@ function InlineSpinner() {
       <Loader2 className="text-muted-foreground size-4 animate-spin" />
     </div>
   )
+}
+
+function selectionPopupPosition(rect: {
+  left: number
+  top: number
+  bottom: number
+}): { left: number; top: number } {
+  const width = 120
+  const height = 40
+  const left = Math.min(
+    Math.max(8, rect.left),
+    Math.max(8, window.innerWidth - width - 8),
+  )
+  const top =
+    rect.bottom + 8 + height > window.innerHeight
+      ? Math.max(8, rect.top - height - 8)
+      : rect.bottom + 8
+
+  return { left, top }
 }
 
 function diffLineInfo(

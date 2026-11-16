@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { LanguageDescription } from '@codemirror/language'
 import type { Extension } from '@codemirror/state'
@@ -9,6 +9,7 @@ export interface CodeSelection {
   text: string
   fromLine: number
   toLine: number
+  rect?: { left: number; top: number; bottom: number }
 }
 
 export default function CodeViewer({
@@ -21,10 +22,8 @@ export default function CodeViewer({
   onSelectionChange?: (selection: CodeSelection | null) => void
 }) {
   const [language, setLanguage] = useState<Extension | null>(null)
-  const lastSelection = useRef('')
 
   useEffect(() => {
-    lastSelection.current = ''
     onSelectionChange?.(null)
 
     const filename = path.split('/').pop() ?? path
@@ -57,12 +56,6 @@ export default function CodeViewer({
 
   function handleUpdate(update: ViewUpdate): void {
     const selection = update.state.selection.main
-    const key = `${selection.from}:${selection.to}`
-
-    if (key === lastSelection.current) {
-      return
-    }
-    lastSelection.current = key
 
     if (selection.empty) {
       onSelectionChange?.(null)
@@ -77,11 +70,15 @@ export default function CodeViewer({
     }
 
     const end = selection.to > selection.from ? selection.to - 1 : selection.to
+    const coords = update.view.coordsAtPos(selection.head)
 
     onSelectionChange?.({
       text,
       fromLine: update.state.doc.lineAt(selection.from).number,
       toLine: update.state.doc.lineAt(end).number,
+      rect: coords
+        ? { left: coords.left, top: coords.top, bottom: coords.bottom }
+        : undefined,
     })
   }
 
