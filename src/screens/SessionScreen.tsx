@@ -1,5 +1,7 @@
 import {
   Fragment,
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -40,6 +42,8 @@ import { useApp } from '@/hooks/use-app'
 import { api } from '@/lib/api'
 import { appTypeLabels } from '@/lib/app'
 import { cn } from '@/lib/utils'
+
+const CodeViewer = lazy(() => import('@/components/code-viewer'))
 
 interface EditorTab {
   id: string
@@ -1243,9 +1247,11 @@ function EditorViewer({
               大きいファイルのため先頭のみ表示しています
             </p>
           )}
-          <pre className="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-relaxed">
-            {file.content || ' '}
-          </pre>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <Suspense fallback={<InlineSpinner />}>
+              <CodeViewer path={file.path} value={file.content ?? ''} />
+            </Suspense>
+          </div>
         </>
       )}
     </div>

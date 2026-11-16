@@ -210,3 +210,25 @@
     opacity: 1;
   }
 }
+
+.cm-editor {
+  height: 100%;
+  font-size: 12px;
+  background-color: transparent;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-scroller {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+  line-height: 1.6;
+}
+
+.cm-gutters {
+  background-color: transparent;
+  border-right: 1px solid var(--border);
+}
