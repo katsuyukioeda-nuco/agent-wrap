@@ -190,7 +190,7 @@ export default function AppWorkspacePage() {
       }}
     >
       <div className="bg-muted/30 min-h-screen">
-        <div className="mx-auto flex min-h-screen w-full max-w-5xl gap-4 px-4 py-6 lg:gap-6 lg:py-10">
+        <div className="mx-auto flex min-h-screen w-full max-w-[1600px] gap-4 px-4 py-6 lg:gap-6 lg:py-10">
           <aside className="hidden w-14 shrink-0 flex-col items-center gap-2 lg:flex">
             {apps.map((app) => (
               <AppRailIcon key={app.id} app={app} active={app.id === appId} />
