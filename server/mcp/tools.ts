@@ -314,35 +314,6 @@ export function registerAppTools(server: McpServer, detail: ConnectedAppDetail):
         }
       },
     )
-
-    server.registerPrompt(
-      'check_comments',
-      {
-        title: 'Check session comments',
-        description:
-          'このセッションの未対応コメントを確認し、対応して done にする手順を開始する。',
-      },
-      async () => ({
-        description: 'agent-wrap のコメント確認手順',
-        messages: [
-          {
-            role: 'user',
-            content: {
-              type: 'text',
-              text: `このセッションの agent-wrap コメントを確認してください。
-
-1. agent-wrap MCP の reflect で自分のセッションを確認する
-2. list_comments で未対応コメントを取得する
-3. 各コメントのファイル・行・選択範囲を確認し、必要な対応をする
-4. 対応したコメントは done_comment に id を渡して完了にする
-5. 最後に、対応内容と残っているコメントを簡潔に報告する
-
-未対応コメントが無い場合は「未対応コメントはありません」と伝えてください。`,
-            },
-          },
-        ],
-      }),
-    )
   }
 
   if (detail.app.appType === 'codex') {

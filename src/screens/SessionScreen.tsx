@@ -14,9 +14,11 @@ import { Link, useParams } from 'react-router-dom'
 import {
   AlignJustify,
   ArrowLeft,
+  Check,
   ChevronDown,
   ChevronRight,
   Columns2,
+  Copy,
   FileText,
   Folder,
   GitBranch,
@@ -856,11 +858,6 @@ export default function SessionScreen() {
                     comments={comments}
                     loading={commentsLoading}
                     error={commentsError}
-                    commandHint={
-                      detail.app.appType === 'opencode'
-                        ? '/agent-wrap:check_comments'
-                        : null
-                    }
                     onRefresh={() => void loadComments()}
                   />
                 )}
@@ -949,18 +946,7 @@ export default function SessionScreen() {
           />
 
           <p className="text-muted-foreground text-[11px] leading-relaxed">
-            コメントは保存されます。
-            {detail.app.appType === 'opencode' ? (
-              <>
-                会話で{' '}
-                <code className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">
-                  /agent-wrap:check_comments
-                </code>{' '}
-                と送ると、未対応コメントを確認できます。
-              </>
-            ) : (
-              '会話で「コメントを確認して」と伝えると、未対応コメントを取得できます。'
-            )}
+            コメントは保存されます。右のコメント欄にあるプロンプトをコピーして会話に貼ると、未対応コメントの確認を依頼できます。
           </p>
 
           {commentError && (
@@ -1040,20 +1026,33 @@ function RailButton({
   )
 }
 
+const COMMENT_CHECK_PROMPT =
+  'agent-wrap MCP の reflect でこのセッションを確認し、list_comments で未対応コメントを取得してください。各コメントの内容を確認して対応し、対応したコメントは done_comment にその id を渡して完了にしてください。最後に、対応内容と残っているコメントを報告してください。'
+
 function CommentsPanel({
   comments,
   loading,
   error,
-  commandHint,
   onRefresh,
 }: {
   comments: SessionComment[]
   loading: boolean
   error: string | null
-  commandHint: string | null
   onRefresh: () => void
 }) {
+  const [promptCopied, setPromptCopied] = useState(false)
+
   const unresolved = comments.filter((comment) => !comment.doneAt).length
+
+  const copyPrompt = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(COMMENT_CHECK_PROMPT)
+      setPromptCopied(true)
+      window.setTimeout(() => setPromptCopied(false), 1500)
+    } catch {
+      setPromptCopied(false)
+    }
+  }, [])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -1082,19 +1081,29 @@ function CommentsPanel({
         </Button>
       </header>
 
-      {commandHint ? (
-        <p className="text-muted-foreground shrink-0 border-b px-4 py-1.5 text-[10px] leading-relaxed">
-          会話で{' '}
-          <code className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">
-            {commandHint}
-          </code>{' '}
-          と送ると、未対応コメントの確認を依頼できます。
+      <div className="shrink-0 space-y-2 border-b px-4 py-2.5">
+        <p className="text-muted-foreground text-[10px] leading-relaxed">
+          次のプロンプトをコピーして会話に貼ると、未対応コメントの確認を依頼できます。
         </p>
-      ) : (
-        <p className="text-muted-foreground shrink-0 border-b px-4 py-1.5 text-[10px] leading-relaxed">
-          会話で「コメントを確認して」と伝えると、未対応コメントがエージェントに渡されます。
-        </p>
-      )}
+        <pre className="bg-muted/40 text-muted-foreground max-h-28 overflow-auto rounded border p-2 font-mono text-[10px] leading-relaxed break-words whitespace-pre-wrap select-all">
+          {COMMENT_CHECK_PROMPT}
+        </pre>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-[11px]"
+          aria-label="コメント確認プロンプトをコピー"
+          title="会話に貼るプロンプトをコピー"
+          onClick={() => void copyPrompt()}
+        >
+          {promptCopied ? (
+            <Check className="size-3.5" />
+          ) : (
+            <Copy className="size-3.5" />
+          )}
+          {promptCopied ? 'コピーしました' : 'プロンプトをコピー'}
+        </Button>
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading && comments.length === 0 ? (
