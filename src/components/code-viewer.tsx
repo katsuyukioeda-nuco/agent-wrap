@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { LanguageDescription } from '@codemirror/language'
 import type { Extension } from '@codemirror/state'
@@ -23,9 +23,11 @@ export default function CodeViewer({
 }) {
   const [language, setLanguage] = useState<Extension | null>(null)
   const extensions = useMemo(() => (language ? [language] : []), [language])
+  const selectionChangeRef = useRef(onSelectionChange)
+  selectionChangeRef.current = onSelectionChange
 
   useEffect(() => {
-    onSelectionChange?.(null)
+    selectionChangeRef.current?.(null)
 
     const filename = path.split('/').pop() ?? path
     const description = LanguageDescription.matchFilename(languages, filename)
@@ -53,7 +55,7 @@ export default function CodeViewer({
     return () => {
       cancelled = true
     }
-  }, [path, onSelectionChange])
+  }, [path])
 
   function handleUpdate(update: ViewUpdate): void {
     if (!update.selectionSet && !update.docChanged) {
@@ -90,6 +92,7 @@ export default function CodeViewer({
   return (
     <CodeMirror
       value={value}
+      style={{ height: '100%' }}
       height="100%"
       theme="light"
       editable={false}

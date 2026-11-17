@@ -948,6 +948,9 @@ export default function SessionScreen() {
                       diffMode={diffMode}
                       onDiffModeChange={setDiffMode}
                       onFileSelectionChange={setFileSelection}
+                      onDiffSelectionChange={setDiffSelection}
+                      workspaceBase={workspaceBase}
+                      rootIndex={rootIndex}
                       onReloadFile={reloadActiveFile}
                       onOpenFile={openFileTab}
                     />
@@ -1829,6 +1832,87 @@ function EditorTabs({
   )
 }
 
+function UntrackedFileView({
+  workspaceBase,
+  rootIndex,
+  path,
+  onSelectionChange,
+}: {
+  workspaceBase: string
+  rootIndex: number
+  path: string
+  onSelectionChange: (selection: CodeSelection | null) => void
+}) {
+  const [file, setFile] = useState<WorkspaceFileResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const params = new URLSearchParams({
+      root: String(rootIndex),
+      path,
+    })
+
+    setFile(null)
+    setError(null)
+
+    api<WorkspaceFileResponse>(`${workspaceBase}/file?${params}`)
+      .then((result) => {
+        if (!cancelled) {
+          setFile(result)
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) {
+          setError(errorMessage(loadError))
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceBase, rootIndex, path])
+
+  if (error) {
+    return (
+      <p className="text-muted-foreground p-4 text-xs break-words">{error}</p>
+    )
+  }
+
+  if (!file) {
+    return <InlineSpinner />
+  }
+
+  if (file.binary) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center">
+        <p className="text-muted-foreground text-xs">
+          バイナリファイルのため表示できません
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {file.truncated && (
+        <p className="text-muted-foreground shrink-0 border-b px-3 py-1.5 text-[10px]">
+          大きいファイルのため先頭のみ表示しています
+        </p>
+      )}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <Suspense fallback={<InlineSpinner />}>
+          <CodeViewer
+            path={file.path}
+            value={file.content ?? ''}
+            onSelectionChange={onSelectionChange}
+          />
+        </Suspense>
+      </div>
+    </div>
+  )
+}
+
 function EditorViewer({
   tab,
   diff,
@@ -1840,6 +1924,9 @@ function EditorViewer({
   diffMode,
   onDiffModeChange,
   onFileSelectionChange,
+  onDiffSelectionChange,
+  workspaceBase,
+  rootIndex,
   onReloadFile,
   onOpenFile,
 }: {
@@ -1853,6 +1940,9 @@ function EditorViewer({
   diffMode: 'split' | 'unified'
   onDiffModeChange: (mode: 'split' | 'unified') => void
   onFileSelectionChange: (selection: CodeSelection | null) => void
+  onDiffSelectionChange: (selection: DiffSelection | null) => void
+  workspaceBase: string
+  rootIndex: number
   onReloadFile: () => void
   onOpenFile: (path: string) => void
 }) {
@@ -1945,11 +2035,28 @@ function EditorViewer({
         </header>
 
         {file.untracked ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center">
-            <p className="text-muted-foreground text-xs">
-              未追跡ファイルです。内容はファイルタブから確認できます。
-            </p>
-          </div>
+          <UntrackedFileView
+            workspaceBase={workspaceBase}
+            rootIndex={rootIndex}
+            path={
+              file.repoPath === '.'
+                ? file.path
+                : `${file.repoPath}/${file.path}`
+            }
+            onSelectionChange={(selection) =>
+              onDiffSelectionChange(
+                selection
+                  ? {
+                      text: selection.text,
+                      startLine: selection.fromLine,
+                      endLine: selection.toLine,
+                      side: 'new',
+                      rect: selection.rect,
+                    }
+                  : null,
+              )
+            }
+          />
         ) : file.diff.trim() ? (
           <>
             <DiffViewer text={file.diff} mode={diffMode} />
