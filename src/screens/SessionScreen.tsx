@@ -1549,18 +1549,16 @@ function ProcessesPanel({
     process.status === 'running' || process.status === 'starting'
 
   const ordered = useMemo(() => {
-    return [...processes].sort((a, b) => {
-      const activeOrder = Number(isActive(a)) - Number(isActive(b))
+    const time = (process: ProcessDefinition) =>
+      new Date(process.startedAt ?? process.createdAt).getTime()
+    const running = processes
+      .filter(isActive)
+      .sort((a, b) => time(a) - time(b))
+    const stopped = processes
+      .filter((process) => !isActive(process))
+      .sort((a, b) => time(b) - time(a))
 
-      if (activeOrder !== 0) {
-        return -activeOrder
-      }
-
-      const aTime = new Date(a.startedAt ?? a.createdAt).getTime()
-      const bTime = new Date(b.startedAt ?? b.createdAt).getTime()
-
-      return bTime - aTime
-    })
+    return [...running, ...stopped]
   }, [processes])
 
   const running = processes.filter(isActive).length
