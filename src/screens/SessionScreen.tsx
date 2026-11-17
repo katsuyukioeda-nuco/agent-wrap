@@ -385,6 +385,24 @@ export default function SessionScreen() {
     [workspaceBase, rootIndex],
   )
 
+  const openWorkspaceFolder = useCallback(async () => {
+    if (!workspaceBase) {
+      return
+    }
+
+    try {
+      await api(`${workspaceBase}/reveal`, {
+        method: 'POST',
+        body: JSON.stringify({ root: rootIndex, path: '.' }),
+      })
+      setNotice('フォルダを開きました')
+    } catch (openError) {
+      setNotice(errorMessage(openError))
+    }
+
+    window.setTimeout(() => setNotice(null), 2500)
+  }, [workspaceBase, rootIndex])
+
   const copyEntryPath = useCallback(
     async (entry: WorkspaceEntry) => {
       setContextMenu(null)
@@ -751,7 +769,6 @@ export default function SessionScreen() {
     )
   }
 
-  const root = roots[rootIndex]
   const backTo = session.project
     ? `/${appId}/?project=${encodeURIComponent(session.project.id)}`
     : `/${appId}/`
@@ -770,9 +787,6 @@ export default function SessionScreen() {
           <h1 className="truncate text-base font-semibold tracking-tight">
             {session.session.title}
           </h1>
-          <p className="text-muted-foreground truncate font-mono text-[11px]">
-            {root?.path ?? session.project?.path ?? ''}
-          </p>
         </div>
 
         <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]">
@@ -815,22 +829,34 @@ export default function SessionScreen() {
                   <h2 className="text-xs font-semibold tracking-tight">
                     ファイル
                   </h2>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 shrink-0"
-                    aria-label="ファイルツリーを更新"
-                    title="更新"
-                    onClick={refreshTree}
-                  >
-                    <RefreshCw
-                      className={cn(
-                        'size-3.5',
-                        (dirLoading.has('') || dirLoading.size > 0) &&
-                          'animate-spin',
-                      )}
-                    />
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      aria-label="ワークスペースのフォルダを開く"
+                      title="ワークスペースのフォルダを開く"
+                      onClick={() => void openWorkspaceFolder()}
+                    >
+                      <FolderOpen className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      aria-label="ファイルツリーを更新"
+                      title="更新"
+                      onClick={refreshTree}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          'size-3.5',
+                          (dirLoading.has('') || dirLoading.size > 0) &&
+                            'animate-spin',
+                        )}
+                      />
+                    </Button>
+                  </div>
                 </header>
 
                 <div className="min-h-0 flex-1 overflow-y-auto py-1">
