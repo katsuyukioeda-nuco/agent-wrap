@@ -16,6 +16,7 @@ import {
 import {
   listSessionProcesses,
   readProcessLog,
+  startProcess,
   stopProcess,
 } from '../processes'
 import {
@@ -77,6 +78,12 @@ const interruptSchema = z.object({
 const revealSchema = z.object({
   root: z.number().int().min(0).optional(),
   path: z.string().trim().min(1).max(2048),
+})
+
+const startProcessSchema = z.object({
+  command: z.string().trim().min(1).max(4000),
+  cwd: z.string().trim().min(1).max(2048).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
 })
 
 const commentSchema = z.object({
@@ -461,6 +468,37 @@ apps.post('/:id/sessions/:sessionId/comments', async (c) => {
     return c.json({ ok: true, comment })
   } catch (error) {
     return c.json({ error: errorMessage(error) }, 502)
+  }
+})
+
+apps.post('/:id/sessions/:sessionId/processes', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  const body = await c.req.json().catch(() => null)
+  const parsed = startProcessSchema.safeParse(body)
+
+  if (!parsed.success) {
+    return c.json(
+      { error: 'Invalid request body', issues: parsed.error.issues },
+      400,
+    )
+  }
+
+  try {
+    const process = await startProcess({
+      detail,
+      sessionId: c.req.param('sessionId'),
+      command: parsed.data.command,
+      cwd: parsed.data.cwd,
+      name: parsed.data.name,
+    })
+
+    return c.json({ process })
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 400)
   }
 })
 

@@ -279,11 +279,14 @@ MCP ツール:
 API:
 
 - `GET /api/apps/:id/sessions/:sessionId/processes`
+- `POST /api/apps/:id/sessions/:sessionId/processes` — 一覧から再実行する
+  - body: `{ "command": "npm run build", "cwd": "...", "name": "..." }`
 - `GET /api/apps/:id/processes/:processId/logs?tail=200`
 - `POST /api/apps/:id/processes/:processId/stop`
 
-UI は右レールの「プロセス」。実行中の件数をバッジに出し、5 秒ごとに更新します。
-行ごとにログの表示と停止ができます。
+UI は右レールの「プロセス」。実行中を先頭に、起動日時の新しい順で表示します。
+行にはコマンドを出し、実行中は赤い停止ボタン、終了済みは再実行ボタンを表示します。
+5 秒ごとに更新し、行ごとにログの表示と停止・再実行ができます。
 
 ### コメント確認プロンプト
 

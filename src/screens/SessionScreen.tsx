@@ -28,6 +28,7 @@ import {
   Loader2,
   MessageSquare,
   MessageSquarePlus,
+  Play,
   RefreshCw,
   ScrollText,
   Square,
@@ -418,6 +419,30 @@ export default function SessionScreen() {
       }
     },
     [appId, loadProcesses],
+  )
+
+  const rerunProcess = useCallback(
+    async (process: ProcessDefinition) => {
+      if (!appId || !sessionId) {
+        return
+      }
+
+      try {
+        await api(`/apps/${appId}/sessions/${sessionId}/processes`, {
+          method: 'POST',
+          body: JSON.stringify({
+            command: process.command,
+            cwd: process.cwd,
+            name: process.name,
+          }),
+        })
+        await loadProcesses()
+      } catch (runError) {
+        setNotice(errorMessage(runError))
+        window.setTimeout(() => setNotice(null), 3000)
+      }
+    },
+    [appId, sessionId, loadProcesses],
   )
 
   const toggleProcessLog = useCallback(
@@ -1102,6 +1127,7 @@ export default function SessionScreen() {
                     logLoadingId={processLogLoading}
                     onRefresh={() => void loadProcesses()}
                     onStop={(id) => void stopManagedProcess(id)}
+                    onRun={(process) => void rerunProcess(process)}
                     onToggleLog={(id) => void toggleProcessLog(id)}
                   />
                 )}
@@ -1507,6 +1533,7 @@ function ProcessesPanel({
   logLoadingId,
   onRefresh,
   onStop,
+  onRun,
   onToggleLog,
 }: {
   processes: ProcessDefinition[]
@@ -1517,11 +1544,28 @@ function ProcessesPanel({
   logLoadingId: string | null
   onRefresh: () => void
   onStop: (id: string) => void
+  onRun: (process: ProcessDefinition) => void
   onToggleLog: (id: string) => void
 }) {
-  const running = processes.filter(
-    (process) => process.status === 'running' || process.status === 'starting',
-  ).length
+  const isActive = (process: ProcessDefinition) =>
+    process.status === 'running' || process.status === 'starting'
+
+  const ordered = useMemo(() => {
+    return [...processes].sort((a, b) => {
+      const activeOrder = Number(isActive(a)) - Number(isActive(b))
+
+      if (activeOrder !== 0) {
+        return -activeOrder
+      }
+
+      const aTime = new Date(a.startedAt ?? a.createdAt).getTime()
+      const bTime = new Date(b.startedAt ?? b.createdAt).getTime()
+
+      return bTime - aTime
+    })
+  }, [processes])
+
+  const running = processes.filter(isActive).length
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -1570,7 +1614,7 @@ function ProcessesPanel({
           </div>
         ) : (
           <ul className="divide-y">
-            {processes.map((process) => (
+            {ordered.map((process) => (
               <li key={process.id} className="px-4 py-2.5">
                 <div className="flex items-center gap-2">
                   <span
@@ -1580,10 +1624,7 @@ function ProcessesPanel({
                     )}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium">
-                      {process.name}
-                    </p>
-                    <p className="text-muted-foreground truncate font-mono text-[10px]">
+                    <p className="truncate font-mono text-xs font-medium">
                       {process.command}
                     </p>
                   </div>
@@ -1597,17 +1638,27 @@ function ProcessesPanel({
                   >
                     <ScrollText className="size-3.5" />
                   </Button>
-                  {(process.status === 'running' ||
-                    process.status === 'starting') && (
+                  {isActive(process) ? (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-7 shrink-0"
+                      className="text-destructive hover:text-destructive size-7 shrink-0"
                       aria-label="プロセスを停止"
                       title="停止"
                       onClick={() => onStop(process.id)}
                     >
-                      <Square className="size-3" />
+                      <Square className="fill-destructive size-3" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      aria-label="プロセスを実行"
+                      title="実行"
+                      onClick={() => onRun(process)}
+                    >
+                      <Play className="size-3.5" />
                     </Button>
                   )}
                 </div>
