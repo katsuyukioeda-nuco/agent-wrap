@@ -1,6 +1,6 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import { closeSync, openSync } from 'node:fs'
-import { mkdtemp, open, rm, stat } from 'node:fs/promises'
+import { mkdtemp, open, rm, stat, appendFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { v7 as uuidv7 } from 'uuid'
@@ -128,27 +128,43 @@ export async function startProcess(
     throw error
   }
 
-  const logFd = openSync(logPath, 'a')
+  return launch(record)
+}
+
+async function launch(
+  record: ProcessDefinition,
+): Promise<ProcessDefinition> {
+  const info = await stat(record.cwd).catch(() => null)
+
+  if (!info || !info.isDirectory()) {
+    await updateProcess(record.id, {
+      status: 'failed',
+      endedAt: new Date(),
+    })
+    throw new Error(`Working directory not found: ${record.cwd}`)
+  }
+
+  const logFd = openSync(record.logPath, 'a')
   const shell =
     process.platform === 'win32'
       ? process.env.ComSpec ?? 'cmd.exe'
       : process.env.SHELL || '/bin/sh'
   const args =
     process.platform === 'win32'
-      ? ['/d', '/s', '/c', command]
-      : ['-c', command]
+      ? ['/d', '/s', '/c', record.command]
+      : ['-c', record.command]
 
   let child: ChildProcess
 
   try {
     child = spawn(shell, args, {
-      cwd,
+      cwd: record.cwd,
       detached: true,
       stdio: ['ignore', logFd, logFd],
       env: process.env,
     })
   } catch (error) {
-    await updateProcess(id, {
+    await updateProcess(record.id, {
       status: 'failed',
       endedAt: new Date(),
     })
@@ -157,29 +173,32 @@ export async function startProcess(
     closeSync(logFd)
   }
 
-  running.set(id, child)
+  running.set(record.id, child)
   const pid = child.pid ?? null
 
-  await updateProcess(id, {
+  await updateProcess(record.id, {
     pid,
     status: 'running',
+    exitCode: null,
+    signal: null,
     startedAt: new Date(),
+    endedAt: null,
   })
 
   child.on('error', () => {
-    running.delete(id)
-    void updateProcess(id, {
+    running.delete(record.id)
+    void updateProcess(record.id, {
       status: 'failed',
       endedAt: new Date(),
     })
   })
 
   child.on('exit', (code, signal) => {
-    running.delete(id)
-    const stopped = stopRequested.has(id)
-    stopRequested.delete(id)
+    running.delete(record.id)
+    const stopped = stopRequested.has(record.id)
+    stopRequested.delete(record.id)
 
-    void updateProcess(id, {
+    void updateProcess(record.id, {
       status: stopped ? 'killed' : code === 0 ? 'exited' : 'failed',
       exitCode: code,
       signal: signal ?? null,
@@ -189,7 +208,29 @@ export async function startProcess(
 
   child.unref()
 
-  return (await getProcess(id)) ?? record
+  return (await getProcess(record.id)) ?? record
+}
+
+export async function restartProcess(
+  connectedAppId: string,
+  id: string,
+): Promise<ProcessDefinition | null> {
+  const record = await getProcess(id)
+
+  if (!record || record.connectedAppId !== connectedAppId) {
+    return null
+  }
+
+  if (record.status === 'running' || record.status === 'starting') {
+    throw new Error('Process is already running')
+  }
+
+  await appendFile(
+    record.logPath,
+    `\n--- restart ${new Date().toISOString()} ---\n`,
+  ).catch(() => undefined)
+
+  return launch(record)
 }
 
 async function reconcile(

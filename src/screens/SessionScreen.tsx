@@ -423,18 +423,13 @@ export default function SessionScreen() {
 
   const rerunProcess = useCallback(
     async (process: ProcessDefinition) => {
-      if (!appId || !sessionId) {
+      if (!appId) {
         return
       }
 
       try {
-        await api(`/apps/${appId}/sessions/${sessionId}/processes`, {
+        await api(`/apps/${appId}/processes/${process.id}/run`, {
           method: 'POST',
-          body: JSON.stringify({
-            command: process.command,
-            cwd: process.cwd,
-            name: process.name,
-          }),
         })
         await loadProcesses()
       } catch (runError) {
@@ -442,7 +437,7 @@ export default function SessionScreen() {
         window.setTimeout(() => setNotice(null), 3000)
       }
     },
-    [appId, sessionId, loadProcesses],
+    [appId, loadProcesses],
   )
 
   const toggleProcessLog = useCallback(
