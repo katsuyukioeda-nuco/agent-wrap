@@ -132,7 +132,8 @@ schema.ts                   アプリケーションスキーマ
 Git リポジトリなら `git rev-parse --show-toplevel` の結果を使います。
 パスはルート外に出られないよう `realpath` で検証します。
 
-Git 差分は `git status --porcelain -z` で変更ファイルを列挙し、
+Git 差分は `git status --porcelain -z -uall` で変更ファイルを列挙し、
+未追跡ディレクトリは中のファイル単位で表示します。
 ファイルごとに `git diff HEAD` を取得します。未追跡ファイルはフラグ付きで返します。
 `git submodule status --recursive` で見つけたサブモジュールにも同じ処理を行い、
 差分タブではファイル単位で表示します。大きいファイルは先頭 512KB、

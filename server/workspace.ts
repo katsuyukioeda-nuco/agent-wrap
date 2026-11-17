@@ -340,7 +340,12 @@ async function changedFilesForRepo(
   root: string,
   kind: 'root' | 'submodule',
 ): Promise<GitChangedFile[]> {
-  const status = await runGit(repo, ['status', '--porcelain', '-z'])
+  const status = await runGit(repo, [
+    'status',
+    '--porcelain',
+    '-z',
+    '-uall',
+  ])
 
   if (!status.ok) {
     return []
