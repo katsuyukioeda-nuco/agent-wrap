@@ -235,6 +235,10 @@ server.registerTool(
 - `reflect`（Codex / OpenCode）
 - `list_comments`（Codex / OpenCode）
 - `done_comment`（Codex / OpenCode）
+- `run_process`（Codex / OpenCode）
+- `list_processes`（Codex / OpenCode）
+- `get_process`（Codex / OpenCode）
+- `stop_process`（Codex / OpenCode）
 
 `reflect` は呼び出し元のセッション情報から自分のセッション画面 URL を返します。
 
@@ -252,6 +256,34 @@ server.registerTool(
 取得しても完了にはならず、`done_comment` に ID を渡すと `done_at` が設定されます。
 ユーザーが「コメントを確認して」と伝えたら、`list_comments` →
 必要な対応 → `done_comment` の順で使います。
+
+### プロセス管理
+
+MCP の `run_process` で起動したプロセスは自動的に `process_definitions` に保存され、
+セッション画面の「プロセス」パネルに表示されます。
+
+- コマンドはシェル経由で実行する（macOS / Linux は `$SHELL -c`、Windows は `cmd /c`）
+- `detached` で起動するため、wrapper を再起動してもプロセスは残る
+- stdout と stderr は一時ディレクトリの `output.log` にまとめて書き出す
+- 停止はプロセスグループへ SIGTERM を送り、5 秒後に残っていれば SIGKILL
+- wrapper の起動時に running の行を PID で照合し、消えていれば exited に更新する
+- 一覧はセッション単位。ログは `get_process` または API の `tail` 行数で取得する
+
+MCP ツール:
+
+- `run_process` — コマンド・cwd（省略時はワークスペースのルート）・名前を指定して起動
+- `list_processes` — このセッションのプロセス一覧
+- `get_process` — 状態とログの末尾
+- `stop_process` — SIGTERM（または SIGKILL）で停止
+
+API:
+
+- `GET /api/apps/:id/sessions/:sessionId/processes`
+- `GET /api/apps/:id/processes/:processId/logs?tail=200`
+- `POST /api/apps/:id/processes/:processId/stop`
+
+UI は右レールの「プロセス」。実行中の件数をバッジに出し、5 秒ごとに更新します。
+行ごとにログの表示と停止ができます。
 
 ### コメント確認プロンプト
 
@@ -290,6 +322,7 @@ MCP の Prompt（`registerPrompt`）は使いません。Codex が MCP プロン
 - `claude_connected_apps` — `connectedAppId`、binary / permission mode / model
 - `app_state` — シングルトン。`lastOpenConnectedAppId`
 - `session_comments` — `connectedAppId`, `sessionId`, path / selection / comment / attachmentPath / `doneAt`
+- `process_definitions` — `connectedAppId`, `sessionId`, name / cwd / command / pid / status / exitCode / signal / logPath
 
 `app_state.lastOpenConnectedAppId` は最後に開いた Connected App を保持し、`/` のリダイレクトに使います。アプリ削除時は `ON DELETE SET NULL` でクリアされます。
 

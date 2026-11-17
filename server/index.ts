@@ -4,6 +4,7 @@ import { getRequestListener } from '@hono/node-server'
 import app from './app'
 import { stopAllRuntimes } from './agents/manager'
 import { closeAllMcpSessions, handleMcpRequest, isMcpPath } from './mcp/handler'
+import { reconcileProcesses } from './processes'
 
 const port = Number(process.env.PORT ?? 3000)
 const host = process.env.HOST ?? '127.0.0.1'
@@ -60,6 +61,9 @@ function getVite(): Promise<import('vite').ViteDevServer> {
 server.listen(port, host, () => {
   const mode = process.env.NODE_ENV === 'production' ? 'Server' : 'Dev server'
   console.log(`${mode} listening on http://localhost:${port}`)
+  void reconcileProcesses().catch((error) => {
+    console.error('Failed to reconcile managed processes', error)
+  })
 })
 
 process.on('SIGINT', () => void shutdown())

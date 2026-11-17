@@ -103,3 +103,30 @@ export interface SessionComment {
   createdAt: string // ISO8601
   doneAt: string | null // ISO8601
 }
+
+export type ProcessStatus = 'starting' | 'running' | 'exited' | 'failed' | 'killed'
+
+/**
+ * エージェントが MCP から起動したプロセス。
+ * 一度起動すると自動的に管理対象になり、一覧とログを参照できる。
+ */
+export interface ProcessDefinition {
+  id: string // UUIDv7
+  connectedAppId: ConnectedApp['id']
+  /** OpenCode のセッション ID、または Codex の thread ID。 */
+  sessionId: string
+  /** 一覧に表示する名前。未指定なら command から作る。 */
+  name: string
+  cwd: string
+  command: string
+  pid: number | null
+  status: ProcessStatus
+  exitCode: number | null
+  signal: string | null
+  /** stdout / stderr をまとめたログファイルの絶対パス。 */
+  logPath: string
+  createdAt: string // ISO8601
+  startedAt: string | null // ISO8601
+  endedAt: string | null // ISO8601
+  updatedAt: string // ISO8601
+}

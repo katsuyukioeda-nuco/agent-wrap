@@ -29,9 +29,12 @@ import {
   MessageSquare,
   MessageSquarePlus,
   RefreshCw,
+  ScrollText,
+  Square,
+  Terminal,
   X,
 } from 'lucide-react'
-import type { SessionComment } from '../../schema'
+import type { ProcessDefinition, SessionComment } from '../../schema'
 import type {
   GitChangedFile,
   GitRepoSummary,
@@ -135,10 +138,20 @@ export default function SessionScreen() {
     y: number
     entry: WorkspaceEntry
   } | null>(null)
-  const [rightView, setRightView] = useState<'editor' | 'comments'>('editor')
+  const [rightView, setRightView] = useState<'editor' | 'comments' | 'processes'>(
+    'editor',
+  )
   const [comments, setComments] = useState<SessionComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [commentsError, setCommentsError] = useState<string | null>(null)
+  const [processes, setProcesses] = useState<ProcessDefinition[]>([])
+  const [processesLoading, setProcessesLoading] = useState(false)
+  const [processesError, setProcessesError] = useState<string | null>(null)
+  const [openLogId, setOpenLogId] = useState<string | null>(null)
+  const [processLogs, setProcessLogs] = useState<Record<string, string[]>>({})
+  const [processLogLoading, setProcessLogLoading] = useState<string | null>(
+    null,
+  )
   const editorPaneRef = useRef<HTMLDivElement | null>(null)
   const selectionPopupRef = useRef<HTMLDivElement | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
@@ -290,6 +303,40 @@ export default function SessionScreen() {
     }
   }, [rightView, loadComments])
 
+  const loadProcesses = useCallback(async () => {
+    if (!appId || !sessionId) {
+      return
+    }
+
+    setProcessesLoading(true)
+
+    try {
+      const result = await api<{ processes: ProcessDefinition[] }>(
+        `/apps/${appId}/sessions/${sessionId}/processes`,
+      )
+      setProcesses(result.processes)
+      setProcessesError(null)
+    } catch (loadError) {
+      setProcessesError(errorMessage(loadError))
+    } finally {
+      setProcessesLoading(false)
+    }
+  }, [appId, sessionId])
+
+  useEffect(() => {
+    void loadProcesses()
+  }, [loadProcesses])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadProcesses()
+    }, 5000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [loadProcesses])
+
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null
   const activeFilePath = activeTab?.kind === 'file' ? activeTab.path : null
 
@@ -351,6 +398,63 @@ export default function SessionScreen() {
   const unresolvedComments = comments.filter(
     (comment) => !comment.doneAt,
   ).length
+
+  const runningProcesses = processes.filter(
+    (process) => process.status === 'running' || process.status === 'starting',
+  ).length
+
+  const stopManagedProcess = useCallback(
+    async (id: string) => {
+      if (!appId) {
+        return
+      }
+
+      try {
+        await api(`/apps/${appId}/processes/${id}/stop`, { method: 'POST' })
+        await loadProcesses()
+      } catch (stopError) {
+        setNotice(errorMessage(stopError))
+        window.setTimeout(() => setNotice(null), 3000)
+      }
+    },
+    [appId, loadProcesses],
+  )
+
+  const toggleProcessLog = useCallback(
+    async (id: string) => {
+      if (!appId) {
+        return
+      }
+
+      if (openLogId === id) {
+        setOpenLogId(null)
+        return
+      }
+
+      setOpenLogId(id)
+      setProcessLogLoading(id)
+
+      try {
+        const result = await api<{
+          process: ProcessDefinition
+          log: { lines: string[]; truncated: boolean }
+        }>(`/apps/${appId}/processes/${id}/logs?tail=300`)
+
+        setProcessLogs((previous) => ({
+          ...previous,
+          [id]: result.log.lines,
+        }))
+      } catch (logError) {
+        setProcessLogs((previous) => ({
+          ...previous,
+          [id]: [errorMessage(logError)],
+        }))
+      } finally {
+        setProcessLogLoading(null)
+      }
+    },
+    [appId, openLogId],
+  )
 
   const revealLabel = useMemo(() => {
     if (/Mac/i.test(navigator.userAgent)) {
@@ -981,12 +1085,24 @@ export default function SessionScreen() {
                       onOpenFile={openFileTab}
                     />
                   </>
-                ) : (
+                ) : rightView === 'comments' ? (
                   <CommentsPanel
                     comments={comments}
                     loading={commentsLoading}
                     error={commentsError}
                     onRefresh={() => void loadComments()}
+                  />
+                ) : (
+                  <ProcessesPanel
+                    processes={processes}
+                    loading={processesLoading}
+                    error={processesError}
+                    openLogId={openLogId}
+                    logs={processLogs}
+                    logLoadingId={processLogLoading}
+                    onRefresh={() => void loadProcesses()}
+                    onStop={(id) => void stopManagedProcess(id)}
+                    onToggleLog={(id) => void toggleProcessLog(id)}
                   />
                 )}
               </div>
@@ -1009,6 +1125,17 @@ export default function SessionScreen() {
                   }}
                 >
                   <MessageSquare className="size-4" />
+                </RailButton>
+                <RailButton
+                  active={rightView === 'processes'}
+                  label="プロセス"
+                  badge={runningProcesses}
+                  onClick={() => {
+                    setRightView('processes')
+                    void loadProcesses()
+                  }}
+                >
+                  <Terminal className="size-4" />
                 </RailButton>
               </aside>
             </section>
@@ -1345,6 +1472,174 @@ function CommentItem({ comment }: { comment: SessionComment }) {
         </div>
       </div>
     </li>
+  )
+}
+
+const processStatusLabels: Record<ProcessDefinition['status'], string> = {
+  starting: '起動中',
+  running: '実行中',
+  exited: '終了',
+  failed: '失敗',
+  killed: '停止',
+}
+
+function processStatusClass(status: ProcessDefinition['status']): string {
+  switch (status) {
+    case 'running':
+      return 'bg-emerald-500 animate-pulse'
+    case 'starting':
+      return 'bg-amber-500 animate-pulse'
+    case 'failed':
+      return 'bg-destructive'
+    case 'killed':
+      return 'bg-amber-500'
+    default:
+      return 'bg-muted-foreground/50'
+  }
+}
+
+function ProcessesPanel({
+  processes,
+  loading,
+  error,
+  openLogId,
+  logs,
+  logLoadingId,
+  onRefresh,
+  onStop,
+  onToggleLog,
+}: {
+  processes: ProcessDefinition[]
+  loading: boolean
+  error: string | null
+  openLogId: string | null
+  logs: Record<string, string[]>
+  logLoadingId: string | null
+  onRefresh: () => void
+  onStop: (id: string) => void
+  onToggleLog: (id: string) => void
+}) {
+  const running = processes.filter(
+    (process) => process.status === 'running' || process.status === 'starting',
+  ).length
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="text-sm font-semibold tracking-tight">プロセス</h2>
+          <span className="text-muted-foreground text-[10px]">
+            {processes.length}
+          </span>
+          {running > 0 && (
+            <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+              {running} 実行中
+            </Badge>
+          )}
+        </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0"
+          aria-label="プロセスを更新"
+          title="更新"
+          onClick={onRefresh}
+        >
+          <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+        </Button>
+      </header>
+
+      <p className="text-muted-foreground shrink-0 border-b px-4 py-1.5 text-[10px] leading-relaxed">
+        エージェントが MCP の run_process で起動したプロセスが表示されます。
+      </p>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {loading && processes.length === 0 ? (
+          <InlineSpinner />
+        ) : error ? (
+          <p className="text-muted-foreground p-4 text-xs break-words">
+            {error}
+          </p>
+        ) : processes.length === 0 ? (
+          <div className="flex min-h-40 items-center justify-center p-6 text-center">
+            <p className="text-muted-foreground text-xs">
+              プロセスはまだありません。run_process
+              で起動すると、ここに表示されます。
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y">
+            {processes.map((process) => (
+              <li key={process.id} className="px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'size-1.5 shrink-0 rounded-full',
+                      processStatusClass(process.status),
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium">
+                      {process.name}
+                    </p>
+                    <p className="text-muted-foreground truncate font-mono text-[10px]">
+                      {process.command}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 shrink-0"
+                    aria-label="ログを表示"
+                    title="ログ"
+                    onClick={() => onToggleLog(process.id)}
+                  >
+                    <ScrollText className="size-3.5" />
+                  </Button>
+                  {(process.status === 'running' ||
+                    process.status === 'starting') && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      aria-label="プロセスを停止"
+                      title="停止"
+                      onClick={() => onStop(process.id)}
+                    >
+                      <Square className="size-3" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 text-[10px]">
+                  <span>{processStatusLabels[process.status]}</span>
+                  {process.pid !== null && <span>PID {process.pid}</span>}
+                  {process.exitCode !== null && (
+                    <span>exit {process.exitCode}</span>
+                  )}
+                  <span>
+                    · {formatRelative(process.startedAt ?? process.createdAt)}
+                  </span>
+                </div>
+
+                <p className="text-muted-foreground mt-0.5 truncate font-mono text-[10px]">
+                  {process.cwd}
+                </p>
+
+                {openLogId === process.id && (
+                  <pre className="bg-muted/40 text-muted-foreground mt-2 max-h-56 overflow-auto rounded border p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
+                    {logLoadingId === process.id
+                      ? '読み込み中…'
+                      : logs[process.id]?.join('\n') || 'ログはありません'}
+                  </pre>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }
 

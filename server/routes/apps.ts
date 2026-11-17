@@ -14,6 +14,11 @@ import {
   listSessionComments,
 } from '../repositories/comments'
 import {
+  listSessionProcesses,
+  readProcessLog,
+  stopProcess,
+} from '../processes'
+import {
   listWorkspaceDirectory,
   readWorkspaceFile,
   resolveWorkspaceRoots,
@@ -456,6 +461,70 @@ apps.post('/:id/sessions/:sessionId/comments', async (c) => {
     return c.json({ ok: true, comment })
   } catch (error) {
     return c.json({ error: errorMessage(error) }, 502)
+  }
+})
+
+apps.get('/:id/sessions/:sessionId/processes', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  try {
+    const processes = await listSessionProcesses(
+      detail.app.id,
+      c.req.param('sessionId'),
+    )
+    return c.json({ processes })
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 500)
+  }
+})
+
+apps.get('/:id/processes/:processId/logs', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  const tail = Number(c.req.query('tail') ?? '200')
+
+  try {
+    const result = await readProcessLog(
+      detail.app.id,
+      c.req.param('processId'),
+      Number.isFinite(tail) ? tail : 200,
+    )
+
+    if (!result) {
+      return c.json({ error: 'Process not found' }, 404)
+    }
+
+    return c.json(result)
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 500)
+  }
+})
+
+apps.post('/:id/processes/:processId/stop', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  try {
+    const process = await stopProcess(
+      detail.app.id,
+      c.req.param('processId'),
+    )
+
+    if (!process) {
+      return c.json({ error: 'Process not found' }, 404)
+    }
+
+    return c.json({ process })
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 500)
   }
 })
 

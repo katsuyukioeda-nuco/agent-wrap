@@ -8,6 +8,12 @@ import {
   listPendingComments,
   markCommentDone,
 } from '../repositories/comments'
+import {
+  listSessionProcesses,
+  readProcessLog,
+  startProcess,
+  stopProcess,
+} from '../processes'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object'
@@ -36,6 +42,31 @@ function opencodeSessionIdFromMeta(
   meta: Record<string, unknown> | undefined,
 ): string | undefined {
   return stringValue(meta?.['ai.opencode/sessionID'])
+}
+
+function sessionIdFromMeta(
+  meta: Record<string, unknown> | undefined,
+): string | undefined {
+  return codexThreadIdFromMeta(meta) ?? opencodeSessionIdFromMeta(meta)
+}
+
+function missingSessionResult() {
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            supported: false,
+            reason:
+              'セッション情報（x-codex-turn-metadata または ai.opencode/sessionID）がありません。',
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  }
 }
 
 /**
@@ -294,6 +325,290 @@ export function registerAppTools(server: McpServer, detail: ConnectedAppDetail):
                       id: comment.id,
                       doneAt: comment.doneAt,
                     },
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: errorMessage(error),
+              },
+            ],
+          }
+        }
+      },
+    )
+
+    server.registerTool(
+      'run_process',
+      {
+        title: 'Run a managed process',
+        description:
+          '開発サーバーやビルドなどのプロセスを起動し、agent-wrap の管理対象にする。起動したプロセスは list_processes・get_process・stop_process で扱う。シェル経由で実行される。',
+        inputSchema: {
+          command: z
+            .string()
+            .trim()
+            .min(1)
+            .max(4000)
+            .describe('実行するコマンド（例: npm run dev）'),
+          cwd: z
+            .string()
+            .trim()
+            .min(1)
+            .max(2048)
+            .optional()
+            .describe('作業ディレクトリ。省略時はワークスペースのルート'),
+          name: z
+            .string()
+            .trim()
+            .min(1)
+            .max(255)
+            .optional()
+            .describe('一覧に表示する名前。省略時はコマンドから作る'),
+        },
+      },
+      async ({ command, cwd, name }, extra) => {
+        const sessionId = sessionIdFromMeta(extra._meta)
+
+        if (!sessionId) {
+          return missingSessionResult()
+        }
+
+        try {
+          const process = await startProcess({
+            detail,
+            sessionId,
+            command,
+            cwd,
+            name,
+          })
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    id: process.id,
+                    pid: process.pid,
+                    status: process.status,
+                    name: process.name,
+                    cwd: process.cwd,
+                    command: process.command,
+                    logPath: process.logPath,
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: errorMessage(error),
+              },
+            ],
+          }
+        }
+      },
+    )
+
+    server.registerTool(
+      'list_processes',
+      {
+        title: 'List managed processes',
+        description:
+          'このセッションで起動したプロセスの一覧を返す。status が running のものは稼働中。',
+        inputSchema: {},
+      },
+      async (_args, extra) => {
+        const sessionId = sessionIdFromMeta(extra._meta)
+
+        if (!sessionId) {
+          return missingSessionResult()
+        }
+
+        try {
+          const processes = await listSessionProcesses(
+            detail.app.id,
+            sessionId,
+          )
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    sessionId,
+                    processes: processes.map((process) => ({
+                      id: process.id,
+                      name: process.name,
+                      command: process.command,
+                      cwd: process.cwd,
+                      pid: process.pid,
+                      status: process.status,
+                      exitCode: process.exitCode,
+                      signal: process.signal,
+                      startedAt: process.startedAt,
+                      endedAt: process.endedAt,
+                    })),
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: errorMessage(error),
+              },
+            ],
+          }
+        }
+      },
+    )
+
+    server.registerTool(
+      'get_process',
+      {
+        title: 'Get a process with logs',
+        description:
+          'プロセスの状態とログの末尾を返す。開発サーバーの起動確認やエラー調査に使う。',
+        inputSchema: {
+          id: z.string().describe('run_process または list_processes の id'),
+          tail: z
+            .number()
+            .int()
+            .min(1)
+            .max(2000)
+            .optional()
+            .describe('返すログ行数。デフォルト 100'),
+        },
+      },
+      async ({ id, tail }, extra) => {
+        const sessionId = sessionIdFromMeta(extra._meta)
+
+        if (!sessionId) {
+          return missingSessionResult()
+        }
+
+        try {
+          const result = await readProcessLog(
+            detail.app.id,
+            id,
+            tail ?? 100,
+          )
+
+          if (!result || result.process.sessionId !== sessionId) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: 'text',
+                  text: `Process not found: ${id}`,
+                },
+              ],
+            }
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    process: result.process,
+                    log: result.log,
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }
+        } catch (error) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: errorMessage(error),
+              },
+            ],
+          }
+        }
+      },
+    )
+
+    server.registerTool(
+      'stop_process',
+      {
+        title: 'Stop a managed process',
+        description:
+          'プロセスを停止する。SIGTERM を送り、5秒後に残っていれば SIGKILL する。',
+        inputSchema: {
+          id: z.string().describe('停止するプロセスの id'),
+          signal: z
+            .enum(['SIGTERM', 'SIGKILL'])
+            .optional()
+            .describe('送るシグナル。デフォルト SIGTERM'),
+        },
+      },
+      async ({ id, signal }, extra) => {
+        const sessionId = sessionIdFromMeta(extra._meta)
+
+        if (!sessionId) {
+          return missingSessionResult()
+        }
+
+        try {
+          const process = await stopProcess(
+            detail.app.id,
+            id,
+            signal ?? 'SIGTERM',
+          )
+
+          if (!process || process.sessionId !== sessionId) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: 'text',
+                  text: `Process not found: ${id}`,
+                },
+              ],
+            }
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    id: process.id,
+                    status: process.status,
+                    exitCode: process.exitCode,
+                    signal: process.signal,
+                    endedAt: process.endedAt,
                   },
                   null,
                   2,
