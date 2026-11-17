@@ -82,7 +82,7 @@ function scheduleForceKill(pid: number): void {
   timer.unref()
 }
 
-export interface StartProcessInput {
+export interface RegisterProcessInput {
   detail: ConnectedAppDetail
   sessionId: string
   command: string
@@ -90,8 +90,12 @@ export interface StartProcessInput {
   name?: string
 }
 
-export async function startProcess(
-  input: StartProcessInput,
+/**
+ * プロセス定義を登録する。実行はしない。
+ * 実行は runProcessDefinition で行う。
+ */
+export async function registerProcessDefinition(
+  input: RegisterProcessInput,
 ): Promise<ProcessDefinition> {
   const command = input.command.trim()
   if (!command) {
@@ -110,12 +114,9 @@ export async function startProcess(
   const logDirectory = await mkdtemp(join(tmpdir(), 'agent-wrap-process-'))
   const logPath = join(logDirectory, 'output.log')
 
-  const id = uuidv7()
-  let record: ProcessDefinition
-
   try {
-    record = await createProcess({
-      id,
+    return await createProcess({
+      id: uuidv7(),
       connectedAppId: input.detail.app.id,
       sessionId: input.sessionId,
       name: input.name?.trim() || defaultName(command),
@@ -126,6 +127,31 @@ export async function startProcess(
   } catch (error) {
     await rm(logDirectory, { recursive: true, force: true })
     throw error
+  }
+}
+
+/**
+ * 登録済みのプロセス定義を実行する。定義の行は増やさず、状態を更新する。
+ */
+export async function runProcessDefinition(
+  connectedAppId: string,
+  id: string,
+): Promise<ProcessDefinition | null> {
+  const record = await getProcess(id)
+
+  if (!record || record.connectedAppId !== connectedAppId) {
+    return null
+  }
+
+  if (record.status === 'running' || record.status === 'starting') {
+    throw new Error('Process is already running')
+  }
+
+  if (record.startedAt) {
+    await appendFile(
+      record.logPath,
+      `\n--- restart ${new Date().toISOString()} ---\n`,
+    ).catch(() => undefined)
   }
 
   return launch(record)
@@ -176,7 +202,8 @@ async function launch(
   running.set(record.id, child)
   const pid = child.pid ?? null
 
-  await updateProcess(record.id, {
+  // すぐ終了するコマンド取りこぼさないよう、DB 更新より先にイベントを購読する。
+  const runningUpdate = updateProcess(record.id, {
     pid,
     status: 'running',
     exitCode: null,
@@ -187,10 +214,12 @@ async function launch(
 
   child.on('error', () => {
     running.delete(record.id)
-    void updateProcess(record.id, {
-      status: 'failed',
-      endedAt: new Date(),
-    })
+    void runningUpdate.then(() =>
+      updateProcess(record.id, {
+        status: 'failed',
+        endedAt: new Date(),
+      }),
+    )
   })
 
   child.on('exit', (code, signal) => {
@@ -198,39 +227,21 @@ async function launch(
     const stopped = stopRequested.has(record.id)
     stopRequested.delete(record.id)
 
-    void updateProcess(record.id, {
-      status: stopped ? 'killed' : code === 0 ? 'exited' : 'failed',
-      exitCode: code,
-      signal: signal ?? null,
-      endedAt: new Date(),
-    })
+    void runningUpdate.then(() =>
+      updateProcess(record.id, {
+        status: stopped ? 'killed' : code === 0 ? 'exited' : 'failed',
+        exitCode: code,
+        signal: signal ?? null,
+        endedAt: new Date(),
+      }),
+    )
   })
 
   child.unref()
 
+  await runningUpdate
+
   return (await getProcess(record.id)) ?? record
-}
-
-export async function restartProcess(
-  connectedAppId: string,
-  id: string,
-): Promise<ProcessDefinition | null> {
-  const record = await getProcess(id)
-
-  if (!record || record.connectedAppId !== connectedAppId) {
-    return null
-  }
-
-  if (record.status === 'running' || record.status === 'starting') {
-    throw new Error('Process is already running')
-  }
-
-  await appendFile(
-    record.logPath,
-    `\n--- restart ${new Date().toISOString()} ---\n`,
-  ).catch(() => undefined)
-
-  return launch(record)
 }
 
 async function reconcile(

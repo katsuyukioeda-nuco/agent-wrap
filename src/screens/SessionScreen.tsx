@@ -1497,6 +1497,7 @@ function CommentItem({ comment }: { comment: SessionComment }) {
 }
 
 const processStatusLabels: Record<ProcessDefinition['status'], string> = {
+  registered: '未実行',
   starting: '起動中',
   running: '実行中',
   exited: '終了',
@@ -1514,6 +1515,8 @@ function processStatusClass(status: ProcessDefinition['status']): string {
       return 'bg-destructive'
     case 'killed':
       return 'bg-amber-500'
+    case 'registered':
+      return 'bg-muted-foreground/40'
     default:
       return 'bg-muted-foreground/50'
   }

@@ -16,7 +16,8 @@ import {
 import {
   listSessionProcesses,
   readProcessLog,
-  restartProcess,
+  registerProcessDefinition,
+  runProcessDefinition,
   stopProcess,
 } from '../processes'
 import {
@@ -78,6 +79,12 @@ const interruptSchema = z.object({
 const revealSchema = z.object({
   root: z.number().int().min(0).optional(),
   path: z.string().trim().min(1).max(2048),
+})
+
+const registerProcessSchema = z.object({
+  command: z.string().trim().min(1).max(4000),
+  cwd: z.string().trim().min(1).max(2048).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
 })
 
 const commentSchema = z.object({
@@ -465,6 +472,37 @@ apps.post('/:id/sessions/:sessionId/comments', async (c) => {
   }
 })
 
+apps.post('/:id/sessions/:sessionId/processes', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  const body = await c.req.json().catch(() => null)
+  const parsed = registerProcessSchema.safeParse(body)
+
+  if (!parsed.success) {
+    return c.json(
+      { error: 'Invalid request body', issues: parsed.error.issues },
+      400,
+    )
+  }
+
+  try {
+    const process = await registerProcessDefinition({
+      detail,
+      sessionId: c.req.param('sessionId'),
+      command: parsed.data.command,
+      cwd: parsed.data.cwd,
+      name: parsed.data.name,
+    })
+
+    return c.json({ process })
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 400)
+  }
+})
+
 apps.post('/:id/processes/:processId/run', async (c) => {
   const detail = await getAppDetail(c.req.param('id'))
   if (!detail) {
@@ -472,7 +510,7 @@ apps.post('/:id/processes/:processId/run', async (c) => {
   }
 
   try {
-    const process = await restartProcess(
+    const process = await runProcessDefinition(
       detail.app.id,
       c.req.param('processId'),
     )

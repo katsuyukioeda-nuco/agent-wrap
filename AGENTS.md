@@ -263,6 +263,9 @@ MCP の `run_process` で起動したプロセスは自動的に `process_defini
 セッション画面の「プロセス」パネルに表示されます。
 
 - コマンドはシェル経由で実行する（macOS / Linux は `$SHELL -c`、Windows は `cmd /c`）
+- プロセス定義の登録と実行は分けて扱う
+  - 登録だけでは実行しない（status は `registered`）
+  - 実行すると同じ行の `pid` / `status` / `startedAt` を更新する
 - `detached` で起動するため、wrapper を再起動してもプロセスは残る
 - stdout と stderr は一時ディレクトリの `output.log` にまとめて書き出す
 - 停止はプロセスグループへ SIGTERM を送り、5 秒後に残っていれば SIGKILL
@@ -271,7 +274,7 @@ MCP の `run_process` で起動したプロセスは自動的に `process_defini
 
 MCP ツール:
 
-- `run_process` — コマンド・cwd（省略時はワークスペースのルート）・名前を指定して起動
+- `run_process` — コマンド・cwd（省略時はワークスペースのルート）・名前で定義を登録し、そのまま実行する
 - `list_processes` — このセッションのプロセス一覧
 - `get_process` — 状態とログの末尾
 - `stop_process` — SIGTERM（または SIGKILL）で停止
@@ -279,14 +282,16 @@ MCP ツール:
 API:
 
 - `GET /api/apps/:id/sessions/:sessionId/processes`
+- `POST /api/apps/:id/sessions/:sessionId/processes` — プロセス定義を登録する（実行はしない）
+  - body: `{ "command": "npm run build", "cwd": "...", "name": "..." }`
+- `POST /api/apps/:id/processes/:processId/run` — 登録済み定義を実行する
 - `GET /api/apps/:id/processes/:processId/logs?tail=200`
 - `POST /api/apps/:id/processes/:processId/stop`
-- `POST /api/apps/:id/processes/:processId/run` — 終了済みプロセスを同じ行のまま再実行する
 
 UI は右レールの「プロセス」。実行中を先頭に、起動日時の新しい順で表示します。
-行にはコマンドを出し、実行中は赤い停止ボタン、終了済みは再実行ボタンを表示します。
-再実行は行を増やさず、その行の PID と状態を更新します。
-5 秒ごとに更新し、行ごとにログの表示と停止・再実行ができます。
+行にはコマンドを出し、実行中は赤い停止ボタン、未実行・終了済みは実行ボタンを表示します。
+実行は行を増やさず、その行の PID と状態を更新します。
+5 秒ごとに更新し、行ごとにログの表示と停止・実行ができます。
 
 ### コメント確認プロンプト
 

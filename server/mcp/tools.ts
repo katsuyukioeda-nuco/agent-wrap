@@ -11,7 +11,8 @@ import {
 import {
   listSessionProcesses,
   readProcessLog,
-  startProcess,
+  registerProcessDefinition,
+  runProcessDefinition,
   stopProcess,
 } from '../processes'
 
@@ -351,7 +352,7 @@ export function registerAppTools(server: McpServer, detail: ConnectedAppDetail):
       {
         title: 'Run a managed process',
         description:
-          '開発サーバーやビルドなどのプロセスを起動し、agent-wrap の管理対象にする。起動したプロセスは list_processes・get_process・stop_process で扱う。シェル経由で実行される。',
+          '開発サーバーやビルドなどのプロセスを登録して実行し、agent-wrap の管理対象にする。起動したプロセスは list_processes・get_process・stop_process で扱う。シェル経由で実行される。',
         inputSchema: {
           command: z
             .string()
@@ -383,13 +384,22 @@ export function registerAppTools(server: McpServer, detail: ConnectedAppDetail):
         }
 
         try {
-          const process = await startProcess({
+          const definition = await registerProcessDefinition({
             detail,
             sessionId,
             command,
             cwd,
             name,
           })
+
+          const process = await runProcessDefinition(
+            detail.app.id,
+            definition.id,
+          )
+
+          if (!process) {
+            throw new Error('Failed to run the registered process')
+          }
 
           return {
             content: [

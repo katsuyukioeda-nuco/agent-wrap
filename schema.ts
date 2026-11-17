@@ -104,7 +104,13 @@ export interface SessionComment {
   doneAt: string | null // ISO8601
 }
 
-export type ProcessStatus = 'starting' | 'running' | 'exited' | 'failed' | 'killed'
+export type ProcessStatus =
+  | 'registered'
+  | 'starting'
+  | 'running'
+  | 'exited'
+  | 'failed'
+  | 'killed'
 
 /**
  * エージェントが MCP から起動したプロセス。

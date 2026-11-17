@@ -68,7 +68,7 @@ export async function createProcess(
     `INSERT INTO process_definitions (
        id, connected_app_id, session_id, name, cwd, command, pid, status,
        exit_code, exit_signal, log_path, created_at, started_at, ended_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, NULL, 'starting', NULL, NULL, ?, ?, NULL, NULL, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, NULL, 'registered', NULL, NULL, ?, ?, NULL, NULL, ?)`,
     [
       input.id,
       input.connectedAppId,
