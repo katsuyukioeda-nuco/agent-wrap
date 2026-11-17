@@ -108,6 +108,9 @@ schema.ts                   アプリケーションスキーマ
 - 右側のアイコンレールからセッションのコメント一覧を開ける
 - 左にファイルツリーと Git 差分を縦積み、右にタブ式のビューアを置く
 - ファイルの内容と差分は右側のタブで切り替える
+- ファイルツリーの項目を右クリックするとコンテキストメニューを表示する
+  - Finder（macOS）/ Explorer（Windows）/ ファイルマネージャー（Linux）で表示
+  - ワークスペース内の絶対パスをコピー
 - ワークスペースが複数ある場合は上部のボタンで切り替える
 
 ### ワークスペース API
@@ -116,6 +119,12 @@ schema.ts                   アプリケーションスキーマ
 - `GET /api/apps/:id/sessions/:sessionId/workspace/files?root=0&path=` — ディレクトリ一覧
 - `GET /api/apps/:id/sessions/:sessionId/workspace/file?root=0&path=` — ファイル内容
 - `GET /api/apps/:id/sessions/:sessionId/workspace/diff?root=0` — Git 差分
+- `POST /api/apps/:id/sessions/:sessionId/workspace/reveal` — OS のファイルマネージャーで表示
+  - body: `{ "root": 0, "path": "src/App.tsx" }`
+
+`reveal` は macOS なら `open -R`（ディレクトリは `open`）、Windows なら `explorer`
+（ファイルは `/select,`）、それ以外は `xdg-open` を使います。
+パスは他のワークスペース API と同じくルート外に出られないよう検証します。
 
 ルートはセッションの作業ディレクトリとプロジェクトの canonical パスから作り、
 Git リポジトリなら `git rev-parse --show-toplevel` の結果を使います。

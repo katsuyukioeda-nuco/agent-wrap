@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { open, readdir, realpath, stat } from 'node:fs/promises'
-import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import type {
   ConnectedAppDetail,
@@ -151,7 +151,8 @@ async function resolveInsideRoot(
 export async function listWorkspaceDirectory(
   root: string,
   input: string,
-): Promise<{ path: string; entries: WorkspaceEntry[] }> {  const directory = await resolveInsideRoot(root, input)
+): Promise<{ path: string; entries: WorkspaceEntry[] }> {
+  const directory = await resolveInsideRoot(root, input)
   const dirents = await readdir(directory, { withFileTypes: true })
 
   const entries: WorkspaceEntry[] = []
@@ -191,6 +192,37 @@ export async function listWorkspaceDirectory(
   return {
     path: toPosixPath(relative(root, directory)),
     entries,
+  }
+}
+
+/**
+ * ファイルまたはディレクトリを OS のファイルマネージャーで表示する。
+ * ファイルは親ディレクトリを開いて選択状態にする。
+ */
+export async function revealWorkspacePath(
+  root: string,
+  input: string,
+): Promise<{ path: string; directory: boolean }> {
+  const target = await resolveInsideRoot(root, input)
+  const directory = await isDirectory(target)
+
+  if (process.platform === 'darwin') {
+    await execFileAsync('open', directory ? [target] : ['-R', target])
+  } else if (process.platform === 'win32') {
+    try {
+      await execFileAsync('explorer', [
+        directory ? target : `/select,${target}`,
+      ])
+    } catch {
+      // explorer は成功時も終了コード 1 を返すことがある
+    }
+  } else {
+    await execFileAsync('xdg-open', [directory ? target : dirname(target)])
+  }
+
+  return {
+    path: toPosixPath(relative(root, target)),
+    directory,
   }
 }
 

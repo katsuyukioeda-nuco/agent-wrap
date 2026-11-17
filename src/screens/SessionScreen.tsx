@@ -21,6 +21,7 @@ import {
   Copy,
   FileText,
   Folder,
+  FolderOpen,
   GitBranch,
   List,
   ListTree,
@@ -128,13 +129,19 @@ export default function SessionScreen() {
   const [commentText, setCommentText] = useState('')
   const [commentSaving, setCommentSaving] = useState(false)
   const [commentError, setCommentError] = useState<string | null>(null)
-  const [savedNotice, setSavedNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    entry: WorkspaceEntry
+  } | null>(null)
   const [rightView, setRightView] = useState<'editor' | 'comments'>('editor')
   const [comments, setComments] = useState<SessionComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [commentsError, setCommentsError] = useState<string | null>(null)
   const editorPaneRef = useRef<HTMLDivElement | null>(null)
   const selectionPopupRef = useRef<HTMLDivElement | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement | null>(null)
 
   const workspaceBase =
     appId && sessionId
@@ -345,6 +352,62 @@ export default function SessionScreen() {
     (comment) => !comment.doneAt,
   ).length
 
+  const revealLabel = useMemo(() => {
+    if (/Mac/i.test(navigator.userAgent)) {
+      return 'Finder で表示'
+    }
+    if (/Windows/i.test(navigator.userAgent)) {
+      return 'Explorer で表示'
+    }
+    return 'ファイルマネージャーで表示'
+  }, [])
+
+  const revealEntry = useCallback(
+    async (entry: WorkspaceEntry) => {
+      setContextMenu(null)
+
+      if (!workspaceBase) {
+        return
+      }
+
+      try {
+        await api(`${workspaceBase}/reveal`, {
+          method: 'POST',
+          body: JSON.stringify({ root: rootIndex, path: entry.path }),
+        })
+        setNotice('ファイルマネージャーで開きました')
+      } catch (revealError) {
+        setNotice(errorMessage(revealError))
+      }
+
+      window.setTimeout(() => setNotice(null), 2500)
+    },
+    [workspaceBase, rootIndex],
+  )
+
+  const copyEntryPath = useCallback(
+    async (entry: WorkspaceEntry) => {
+      setContextMenu(null)
+
+      const root = roots[rootIndex]
+      if (!root) {
+        return
+      }
+
+      const absolute = entry.path ? `${root.path}/${entry.path}` : root.path
+
+      try {
+        await navigator.clipboard.writeText(absolute)
+        setNotice('パスをコピーしました')
+      } catch {
+        setNotice('パスをコピーできませんでした')
+      }
+
+      window.setTimeout(() => setNotice(null), 2000)
+    },
+    [roots, rootIndex],
+  )
+
   useEffect(() => {
     if (!showSelectionPopup) {
       return
@@ -372,6 +435,39 @@ export default function SessionScreen() {
       window.removeEventListener('resize', hide)
     }
   }, [showSelectionPopup])
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) {
+        return
+      }
+      setContextMenu(null)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setContextMenu(null)
+      }
+    }
+
+    const hide = () => setContextMenu(null)
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('scroll', hide, true)
+    window.addEventListener('resize', hide)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('scroll', hide, true)
+      window.removeEventListener('resize', hide)
+    }
+  }, [contextMenu])
 
   useEffect(() => {
     setFileSelection(null)
@@ -620,8 +716,8 @@ export default function SessionScreen() {
       setCommentOpen(false)
       setCommentText('')
       setCommentTarget(null)
-      setSavedNotice('コメントを保存しました')
-      window.setTimeout(() => setSavedNotice(null), 2000)
+      setNotice('コメントを保存しました')
+      window.setTimeout(() => setNotice(null), 2000)
       void loadComments()
     } catch (submitError) {
       setCommentError(errorMessage(submitError))
@@ -755,6 +851,9 @@ export default function SessionScreen() {
                       activeFilePath={activeFilePath}
                       onToggle={toggleFolder}
                       onOpenFile={openFileTab}
+                      onContextMenu={(entry, position) =>
+                        setContextMenu({ ...position, entry })
+                      }
                     />
                   )}
                 </div>
@@ -973,9 +1072,40 @@ export default function SessionScreen() {
         </DialogContent>
       </Dialog>
 
-      {savedNotice && (
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          role="menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="bg-popover text-popover-foreground fixed z-50 min-w-44 rounded-md border p-1 shadow-md"
+        >
+          <p className="text-muted-foreground truncate px-2 py-1 font-mono text-[10px]">
+            {contextMenu.entry.name}
+          </p>
+          <button
+            type="button"
+            role="menuitem"
+            className="hover:bg-muted flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs"
+            onClick={() => void revealEntry(contextMenu.entry)}
+          >
+            <FolderOpen className="size-3.5 shrink-0" />
+            {revealLabel}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="hover:bg-muted flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs"
+            onClick={() => void copyEntryPath(contextMenu.entry)}
+          >
+            <Copy className="size-3.5 shrink-0" />
+            パスをコピー
+          </button>
+        </div>
+      )}
+
+      {notice && (
         <div className="bg-foreground text-background fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-md px-3 py-1.5 text-xs shadow-lg">
-          {savedNotice}
+          {notice}
         </div>
       )}
     </div>
@@ -1199,6 +1329,7 @@ function FileTree({
   activeFilePath,
   onToggle,
   onOpenFile,
+  onContextMenu,
 }: {
   entries: WorkspaceEntry[]
   depth: number
@@ -1209,6 +1340,10 @@ function FileTree({
   activeFilePath: string | null
   onToggle: (path: string) => void
   onOpenFile: (path: string) => void
+  onContextMenu: (
+    entry: WorkspaceEntry,
+    position: { x: number; y: number },
+  ) => void
 }) {
   return (
     <>
@@ -1225,6 +1360,13 @@ function FileTree({
               onClick={() =>
                 isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)
               }
+              onContextMenu={(event) => {
+                event.preventDefault()
+                onContextMenu(entry, {
+                  x: Math.min(event.clientX, window.innerWidth - 220),
+                  y: Math.min(event.clientY, window.innerHeight - 90),
+                })
+              }}
               className={cn(
                 'flex w-full cursor-pointer items-center gap-1.5 py-1 pr-2 text-left text-xs transition-colors',
                 activeFilePath === entry.path
@@ -1278,6 +1420,7 @@ function FileTree({
                     activeFilePath={activeFilePath}
                     onToggle={onToggle}
                     onOpenFile={onOpenFile}
+                    onContextMenu={onContextMenu}
                   />
                 )}
               </>
