@@ -343,6 +343,9 @@ MCP の Prompt（`registerPrompt`）は使いません。Codex が MCP プロン
 - Codex AppServer の起動はユーザー（エージェント）側の責務
 - wrapper は MCP ツール `connect_codex_app_server` で WebSocket URL を受け取り、接続する
 - 接続に成功すると `codex_connected_apps.app_server_url` に保存される
+- `GET /api/apps/:id/connection` は URL の有無だけでなく、TCP で到達できるかも確認する
+- AppServer に到達できない場合は、トップ画面・セッション画面とも
+  「読み込めませんでした」ではなく接続手順（`ConnectScreen`）を表示する
 
 ### OpenCode
 

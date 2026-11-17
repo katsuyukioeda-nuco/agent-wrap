@@ -31,6 +31,7 @@ import { useApp } from '@/hooks/use-app'
 import { api } from '@/lib/api'
 import { mcpUrl } from '@/lib/app'
 import { cn } from '@/lib/utils'
+import ConnectScreen from './ConnectScreen'
 
 interface SessionState {
   sessions: SessionSummary[]
@@ -379,16 +380,20 @@ export default function AppHomeScreen() {
         ) : projectsLoading ? (
           <PaneSpinner />
         ) : projectsError ? (
-          <PaneMessage
-            icon={<Folder />}
-            title="プロジェクトを読み込めませんでした"
-            description={projectsError}
-            action={
-              <Button variant="outline" size="sm" onClick={refresh}>
-                再試行
-              </Button>
-            }
-          />
+          detail.app.appType === 'codex' && /AppServer/i.test(projectsError) ? (
+            <ConnectScreen detail={detail} />
+          ) : (
+            <PaneMessage
+              icon={<Folder />}
+              title="プロジェクトを読み込めませんでした"
+              description={projectsError}
+              action={
+                <Button variant="outline" size="sm" onClick={refresh}>
+                  再試行
+                </Button>
+              }
+            />
+          )
         ) : projects.length === 0 ? (
           <PaneMessage
             icon={<Folder />}

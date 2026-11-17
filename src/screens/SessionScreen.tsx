@@ -63,6 +63,7 @@ import { api } from '@/lib/api'
 import { appTypeLabels } from '@/lib/app'
 import { cn } from '@/lib/utils'
 import type { CodeSelection } from '@/components/code-viewer'
+import ConnectScreen from './ConnectScreen'
 
 const CodeViewer = lazy(() => import('@/components/code-viewer'))
 
@@ -877,6 +878,14 @@ export default function SessionScreen() {
   }
 
   if (error || !session || !appId) {
+    if (
+      detail.app.appType === 'codex' &&
+      error &&
+      /AppServer/i.test(error)
+    ) {
+      return <ConnectScreen detail={detail} />
+    }
+
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
         <p className="text-sm font-medium">セッションを読み込めませんでした</p>
