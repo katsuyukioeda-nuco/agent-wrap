@@ -112,6 +112,8 @@ schema.ts                   アプリケーションスキーマ
 - ファイルツリーの項目を右クリックするとコンテキストメニューを表示する
   - Finder（macOS）/ Explorer（Windows）/ ファイルマネージャー（Linux）で表示
   - ワークスペース内の絶対パスをコピー
+  - 新規ファイル / 新規フォルダ（ファイルの場合は同じフォルダ内に作る）
+  - 名前を変更 / 削除（フォルダは中身ごと削除）
 - 「ファイル」見出しのフォルダアイコンでワークスペースのルートを開ける
 - ワークスペースが複数ある場合は上部のボタンで切り替える
 
@@ -123,10 +125,20 @@ schema.ts                   アプリケーションスキーマ
 - `GET /api/apps/:id/sessions/:sessionId/workspace/diff?root=0` — Git 差分
 - `POST /api/apps/:id/sessions/:sessionId/workspace/reveal` — OS のファイルマネージャーで表示
   - body: `{ "root": 0, "path": "src/App.tsx" }`
+- `POST /api/apps/:id/sessions/:sessionId/workspace/create` — ファイル・フォルダを作成
+  - body: `{ "root": 0, "path": "src", "name": "new.ts", "directory": false }`
+  - `path` は親ディレクトリ（省略時はルート）
+- `POST /api/apps/:id/sessions/:sessionId/workspace/rename` — 同じフォルダ内で名前を変更
+  - body: `{ "root": 0, "path": "src/old.ts", "name": "new.ts" }`
+- `POST /api/apps/:id/sessions/:sessionId/workspace/delete` — ファイル・フォルダを削除
+  - body: `{ "root": 0, "path": "src/old.ts" }`
+  - フォルダは中身ごと削除する
 
 `reveal` は macOS なら `open -R`（ディレクトリは `open`）、Windows なら `explorer`
 （ファイルは `/select,`）、それ以外は `xdg-open` を使います。
 パスは他のワークスペース API と同じくルート外に出られないよう検証します。
+`create` / `rename` の名前は区切り文字・`.`・`..`・`.git` を拒否し、
+既存パスは上書きしません。ワークスペースのルート自体はリネーム・削除できません。
 
 ルートはセッションの作業ディレクトリとプロジェクトの canonical パスから作り、
 Git リポジトリなら `git rev-parse --show-toplevel` の結果を使います。

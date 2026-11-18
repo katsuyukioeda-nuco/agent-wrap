@@ -1,5 +1,15 @@
 import { execFile } from 'node:child_process'
-import { open, readdir, realpath, stat } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import type {
@@ -148,6 +158,76 @@ async function resolveInsideRoot(
   return realTarget
 }
 
+/**
+ * ワークスペース内で新しく作る名前を検証する。
+ * 区切り文字や `.` / `..`、`.git` は受け付けない。
+ */
+function validateEntryName(input: string): string {
+  const name = input.trim()
+
+  if (
+    !name ||
+    name === '.' ||
+    name === '..' ||
+    name === '.git' ||
+    name.includes('/') ||
+    name.includes('\\') ||
+    name.includes('\0')
+  ) {
+    throw new Error('Invalid name')
+  }
+
+  return name
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isGitInternalPath(relativePath: string): boolean {
+  return relativePath.split('/').includes('.git')
+}
+
+/**
+ * ルート内の既存エントリを解決する。末尾のシンボリックリンクは辿らない。
+ * 削除・リネームでリンク先の実体を誤って操作しないために使う。
+ */
+async function resolveEntryInRoot(
+  root: string,
+  input: string,
+): Promise<string> {
+  if (!input || input === '.' || input.includes('\0')) {
+    throw new Error('Invalid path')
+  }
+
+  const name = basename(input)
+
+  if (!name || name === '.' || name === '..') {
+    throw new Error('Invalid path')
+  }
+
+  const parent = await resolveInsideRoot(root, dirname(input))
+  const target = join(parent, name)
+  const relativePath = toPosixPath(relative(root, target))
+
+  if (
+    relativePath.startsWith('..') ||
+    isAbsolute(relativePath) ||
+    isGitInternalPath(relativePath)
+  ) {
+    throw new Error('Invalid path')
+  }
+
+  // 存在しないパスはここで失敗させる（リンク自体は辿らない）。
+  await lstat(target)
+  return target
+}
+
 export async function listWorkspaceDirectory(
   root: string,
   input: string,
@@ -259,6 +339,102 @@ export async function readWorkspaceFile(
     truncated: info.size > MAX_FILE_BYTES,
     content: binary ? undefined : data.toString('utf8'),
   }
+}
+
+export interface WorkspaceMutationResult {
+  path: string
+  type: 'file' | 'directory'
+}
+
+/** 指定したディレクトリの中にファイルまたはフォルダを作る。 */
+export async function createWorkspaceEntry(
+  root: string,
+  parentInput: string,
+  rawName: string,
+  directory: boolean,
+): Promise<WorkspaceMutationResult> {
+  const name = validateEntryName(rawName)
+  const parent = await resolveInsideRoot(root, parentInput)
+
+  if (!(await isDirectory(parent))) {
+    throw new Error('Not a directory')
+  }
+
+  if (isGitInternalPath(toPosixPath(relative(root, parent)))) {
+    throw new Error('Invalid path')
+  }
+
+  const target = join(parent, name)
+
+  if (await pathExists(target)) {
+    throw new Error('Already exists')
+  }
+
+  if (directory) {
+    await mkdir(target)
+  } else {
+    // `wx` で既存ファイルを上書きしない。
+    await writeFile(target, '', { flag: 'wx' })
+  }
+
+  return {
+    path: toPosixPath(relative(root, target)),
+    type: directory ? 'directory' : 'file',
+  }
+}
+
+/** 同じディレクトリ内で名前を変更する。 */
+export async function renameWorkspaceEntry(
+  root: string,
+  input: string,
+  rawName: string,
+): Promise<WorkspaceMutationResult> {
+  const name = validateEntryName(rawName)
+  const source = await resolveEntryInRoot(root, input)
+
+  const target = join(dirname(source), name)
+
+  if (target === source) {
+    return {
+      path: toPosixPath(relative(root, source)),
+      type: (await isDirectory(source)) ? 'directory' : 'file',
+    }
+  }
+
+  // Windows / macOS の大文字小文字だけの変更は存在チェックを通さない。
+  const caseOnlyRename =
+    (process.platform === 'win32' || process.platform === 'darwin') &&
+    target.toLowerCase() === source.toLowerCase()
+
+  if (!caseOnlyRename && (await pathExists(target))) {
+    throw new Error('Already exists')
+  }
+
+  await rename(source, target)
+
+  return {
+    path: toPosixPath(relative(root, target)),
+    type: (await isDirectory(target)) ? 'directory' : 'file',
+  }
+}
+
+/** ファイルまたはフォルダを削除する。フォルダは中身ごと削除する。 */
+export async function deleteWorkspaceEntry(
+  root: string,
+  input: string,
+): Promise<{ path: string }> {
+  const target = await resolveEntryInRoot(root, input)
+  const relativePath = toPosixPath(relative(root, target))
+
+  const info = await lstat(target)
+
+  if (info.isDirectory() && !info.isSymbolicLink()) {
+    await rm(target, { recursive: true })
+  } else {
+    await rm(target)
+  }
+
+  return { path: relativePath }
 }
 
 interface StatusEntry {

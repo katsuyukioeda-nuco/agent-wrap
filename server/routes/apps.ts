@@ -21,8 +21,11 @@ import {
   stopProcess,
 } from '../processes'
 import {
+  createWorkspaceEntry,
+  deleteWorkspaceEntry,
   listWorkspaceDirectory,
   readWorkspaceFile,
+  renameWorkspaceEntry,
   resolveWorkspaceRoots,
   revealWorkspacePath,
   workspaceDiff,
@@ -77,6 +80,24 @@ const interruptSchema = z.object({
 })
 
 const revealSchema = z.object({
+  root: z.number().int().min(0).optional(),
+  path: z.string().trim().min(1).max(2048),
+})
+
+const createEntrySchema = z.object({
+  root: z.number().int().min(0).optional(),
+  path: z.string().max(2048).default(''),
+  name: z.string().trim().min(1).max(255),
+  directory: z.boolean().optional(),
+})
+
+const renameEntrySchema = z.object({
+  root: z.number().int().min(0).optional(),
+  path: z.string().trim().min(1).max(2048),
+  name: z.string().trim().min(1).max(255),
+})
+
+const deleteEntrySchema = z.object({
   root: z.number().int().min(0).optional(),
   path: z.string().trim().min(1).max(2048),
 })
@@ -713,6 +734,144 @@ apps.post('/:id/sessions/:sessionId/workspace/reveal', async (c) => {
 
   try {
     const result = await revealWorkspacePath(root.path, parsed.data.path)
+    return c.json(result)
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 400)
+  }
+})
+
+apps.post('/:id/sessions/:sessionId/workspace/create', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ error: 'Claude Code ではワークスペースに対応していません' }, 400)
+  }
+
+  const body = await c.req.json().catch(() => null)
+  const parsed = createEntrySchema.safeParse(body)
+
+  if (!parsed.success) {
+    return c.json(
+      { error: 'Invalid request body', issues: parsed.error.issues },
+      400,
+    )
+  }
+
+  let roots
+  try {
+    roots = await resolveWorkspaceRoots(detail, c.req.param('sessionId'))
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+
+  const root = selectRoot(
+    roots,
+    parsed.data.root === undefined ? undefined : String(parsed.data.root),
+  )
+  if (!root) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    const result = await createWorkspaceEntry(
+      root.path,
+      parsed.data.path,
+      parsed.data.name,
+      parsed.data.directory === true,
+    )
+    return c.json(result)
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 400)
+  }
+})
+
+apps.post('/:id/sessions/:sessionId/workspace/rename', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ error: 'Claude Code ではワークスペースに対応していません' }, 400)
+  }
+
+  const body = await c.req.json().catch(() => null)
+  const parsed = renameEntrySchema.safeParse(body)
+
+  if (!parsed.success) {
+    return c.json(
+      { error: 'Invalid request body', issues: parsed.error.issues },
+      400,
+    )
+  }
+
+  let roots
+  try {
+    roots = await resolveWorkspaceRoots(detail, c.req.param('sessionId'))
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+
+  const root = selectRoot(
+    roots,
+    parsed.data.root === undefined ? undefined : String(parsed.data.root),
+  )
+  if (!root) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    const result = await renameWorkspaceEntry(
+      root.path,
+      parsed.data.path,
+      parsed.data.name,
+    )
+    return c.json(result)
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 400)
+  }
+})
+
+apps.post('/:id/sessions/:sessionId/workspace/delete', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ error: 'Claude Code ではワークスペースに対応していません' }, 400)
+  }
+
+  const body = await c.req.json().catch(() => null)
+  const parsed = deleteEntrySchema.safeParse(body)
+
+  if (!parsed.success) {
+    return c.json(
+      { error: 'Invalid request body', issues: parsed.error.issues },
+      400,
+    )
+  }
+
+  let roots
+  try {
+    roots = await resolveWorkspaceRoots(detail, c.req.param('sessionId'))
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+
+  const root = selectRoot(
+    roots,
+    parsed.data.root === undefined ? undefined : String(parsed.data.root),
+  )
+  if (!root) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    const result = await deleteWorkspaceEntry(root.path, parsed.data.path)
     return c.json(result)
   } catch (error) {
     return c.json({ error: errorMessage(error) }, 400)

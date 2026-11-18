@@ -19,20 +19,24 @@ import {
   ChevronRight,
   Columns2,
   Copy,
+  FilePlus,
   FileText,
   Folder,
   FolderOpen,
+  FolderPlus,
   GitBranch,
   List,
   ListTree,
   Loader2,
   MessageSquare,
   MessageSquarePlus,
+  Pencil,
   Play,
   RefreshCw,
   ScrollText,
   Square,
   Terminal,
+  Trash2,
   X,
 } from 'lucide-react'
 import type { ProcessDefinition, SessionComment } from '../../schema'
@@ -57,6 +61,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useApp } from '@/hooks/use-app'
 import { api } from '@/lib/api'
@@ -91,6 +96,14 @@ interface CommentTarget {
   endLine?: number
   side?: 'old' | 'new' | 'both'
   text: string
+}
+
+type EntryDialogKind = 'create-file' | 'create-directory' | 'rename'
+
+interface EntryDialogState {
+  kind: EntryDialogKind
+  parent: string
+  entry: WorkspaceEntry | null
 }
 
 export default function SessionScreen() {
@@ -140,6 +153,25 @@ export default function SessionScreen() {
     y: number
     entry: WorkspaceEntry
   } | null>(null)
+  const [entryDialog, setEntryDialog] = useState<EntryDialogState | null>(null)
+  const [entryName, setEntryName] = useState('')
+  const [entryError, setEntryError] = useState<string | null>(null)
+  const [entrySaving, setEntrySaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<WorkspaceEntry | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteSaving, setDeleteSaving] = useState(false)
+
+  const entryDialogTitle =
+    entryDialog?.kind === 'rename'
+      ? '名前を変更'
+      : entryDialog?.kind === 'create-directory'
+        ? '新規フォルダ'
+        : '新規ファイル'
+  const entryDialogSubmitLabel =
+    entryDialog?.kind === 'rename' ? '変更' : '作成'
+  const entryDialogLocation = entryDialog
+    ? entryDialog.parent || 'ワークスペースのルート'
+    : ''
   const [rightView, setRightView] = useState<'editor' | 'comments' | 'processes'>(
     'editor',
   )
@@ -550,6 +582,248 @@ export default function SessionScreen() {
     },
     [roots, rootIndex],
   )
+
+  async function reloadTreeDir(path: string): Promise<void> {
+    setDirEntries((previous) => {
+      const next = { ...previous }
+      delete next[path]
+      return next
+    })
+    setDirErrors((previous) => {
+      const next = { ...previous }
+      delete next[path]
+      return next
+    })
+    await loadTreeDir(rootIndex, path)
+  }
+
+  function remapPath(
+    path: string,
+    from: string,
+    to: string,
+  ): string | null {
+    if (path === from) {
+      return to
+    }
+    if (path.startsWith(`${from}/`)) {
+      return `${to}${path.slice(from.length)}`
+    }
+    return null
+  }
+
+  /** リネーム後に開いているタブとキャッシュのパスを付け替える。 */
+  function applyRenamedPath(from: string, to: string): void {
+    setTabs((previous) =>
+      previous.map((tab) => {
+        if (tab.kind !== 'file') {
+          return tab
+        }
+        const path = remapPath(tab.path, from, to)
+        return path
+          ? { ...tab, id: `file:${path}`, path, title: basename(path) }
+          : tab
+      }),
+    )
+
+    setActiveTabId((previous) => {
+      if (!previous) {
+        return previous
+      }
+      return remapPath(previous, `file:${from}`, `file:${to}`) ?? previous
+    })
+
+    setFileCache((previous) => {
+      const next: Record<string, WorkspaceFileResponse> = {}
+
+      for (const [key, value] of Object.entries(previous)) {
+        const path = remapPath(key, from, to) ?? key
+        next[path] = path === key ? value : { ...value, path }
+      }
+
+      return next
+    })
+
+    setExpanded((previous) => {
+      const next = new Set<string>()
+      for (const path of previous) {
+        if (path !== from && !path.startsWith(`${from}/`)) {
+          next.add(path)
+        }
+      }
+      return next
+    })
+
+    setDirEntries((previous) => {
+      const next = { ...previous }
+      for (const key of Object.keys(next)) {
+        if (key === from || key.startsWith(`${from}/`)) {
+          delete next[key]
+        }
+      }
+      return next
+    })
+  }
+
+  /** 削除したパスに紐づくタブ・キャッシュ・ツリーの状態を捨てる。 */
+  function forgetPaths(target: string): void {
+    const nextTabs = tabs.filter(
+      (tab) =>
+        tab.kind !== 'file' ||
+        (tab.path !== target && !tab.path.startsWith(`${target}/`)),
+    )
+
+    setTabs(nextTabs)
+
+    if (activeTabId && !nextTabs.some((tab) => tab.id === activeTabId)) {
+      setActiveTabId(nextTabs[0]?.id ?? null)
+    }
+
+    setFileCache((previous) => {
+      const next = { ...previous }
+      for (const key of Object.keys(next)) {
+        if (key === target || key.startsWith(`${target}/`)) {
+          delete next[key]
+        }
+      }
+      return next
+    })
+
+    setDirEntries((previous) => {
+      const next = { ...previous }
+      for (const key of Object.keys(next)) {
+        if (key === target || key.startsWith(`${target}/`)) {
+          delete next[key]
+        }
+      }
+      return next
+    })
+
+    setExpanded((previous) => {
+      const next = new Set<string>()
+      for (const path of previous) {
+        if (path !== target && !path.startsWith(`${target}/`)) {
+          next.add(path)
+        }
+      }
+      return next
+    })
+  }
+
+  function openEntryDialog(
+    kind: EntryDialogKind,
+    entry: WorkspaceEntry,
+  ): void {
+    setContextMenu(null)
+    setEntryName(kind === 'rename' ? entry.name : '')
+    setEntryError(null)
+    setEntryDialog({
+      kind,
+      parent: entry.type === 'directory' ? entry.path : parentPath(entry.path),
+      entry,
+    })
+  }
+
+  async function submitEntryDialog(): Promise<void> {
+    if (!entryDialog || !workspaceBase || entrySaving) {
+      return
+    }
+
+    const name = entryName.trim()
+    if (!name) {
+      setEntryError('名前を入力してください')
+      return
+    }
+
+    setEntrySaving(true)
+    setEntryError(null)
+
+    try {
+      if (entryDialog.kind === 'rename') {
+        const entry = entryDialog.entry
+        if (!entry) {
+          return
+        }
+
+        const result = await api<{ path: string }>(`${workspaceBase}/rename`, {
+          method: 'POST',
+          body: JSON.stringify({ root: rootIndex, path: entry.path, name }),
+        })
+
+        applyRenamedPath(entry.path, result.path)
+        setNotice(`${entry.name} の名前を変更しました`)
+        await reloadTreeDir(parentPath(result.path))
+      } else {
+        const directory = entryDialog.kind === 'create-directory'
+
+        const result = await api<{
+          path: string
+          type: 'file' | 'directory'
+        }>(`${workspaceBase}/create`, {
+          method: 'POST',
+          body: JSON.stringify({
+            root: rootIndex,
+            path: entryDialog.parent,
+            name,
+            directory,
+          }),
+        })
+
+        await reloadTreeDir(entryDialog.parent)
+
+        if (!directory) {
+          openFileTab(result.path)
+        }
+
+        setNotice(directory ? 'フォルダを作成しました' : 'ファイルを作成しました')
+      }
+
+      setEntryDialog(null)
+      void loadDiff(rootIndex)
+      window.setTimeout(() => setNotice(null), 2500)
+    } catch (createError) {
+      setEntryError(errorMessage(createError))
+    } finally {
+      setEntrySaving(false)
+    }
+  }
+
+  function openDeleteDialog(entry: WorkspaceEntry): void {
+    setContextMenu(null)
+    setDeleteError(null)
+    setDeleteTarget(entry)
+  }
+
+  async function submitDelete(): Promise<void> {
+    if (!deleteTarget || !workspaceBase || deleteSaving) {
+      return
+    }
+
+    const target = deleteTarget
+    setDeleteSaving(true)
+    setDeleteError(null)
+
+    try {
+      await api(`${workspaceBase}/delete`, {
+        method: 'POST',
+        body: JSON.stringify({ root: rootIndex, path: target.path }),
+      })
+
+      forgetPaths(target.path)
+      setDeleteTarget(null)
+      setNotice(
+        target.type === 'directory'
+          ? 'フォルダを削除しました'
+          : 'ファイルを削除しました',
+      )
+      await reloadTreeDir(parentPath(target.path))
+      void loadDiff(rootIndex)
+      window.setTimeout(() => setNotice(null), 2500)
+    } catch (deleteFailure) {
+      setDeleteError(errorMessage(deleteFailure))
+    } finally {
+      setDeleteSaving(false)
+    }
+  }
 
   useEffect(() => {
     if (!showSelectionPopup) {
@@ -1258,16 +1532,144 @@ export default function SessionScreen() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={entryDialog !== null}
+        onOpenChange={(open) => {
+          if (!open && !entrySaving) {
+            setEntryDialog(null)
+            setEntryError(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{entryDialogTitle}</DialogTitle>
+            <DialogDescription>
+              {entryDialog?.kind === 'rename'
+                ? `${entryDialog.entry?.name ?? ''} の名前を変更します。`
+                : `${entryDialogLocation} に作成します。`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Input
+            autoFocus
+            value={entryName}
+            disabled={entrySaving}
+            aria-label="名前"
+            placeholder={
+              entryDialog?.kind === 'create-directory'
+                ? 'フォルダ名'
+                : '名前'
+            }
+            onChange={(event) => setEntryName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void submitEntryDialog()
+              }
+            }}
+          />
+
+          {entryError && (
+            <p className="text-destructive text-xs break-words">{entryError}</p>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEntryDialog(null)
+                setEntryError(null)
+              }}
+              disabled={entrySaving}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={() => void submitEntryDialog()}
+              disabled={entrySaving || !entryName.trim()}
+            >
+              {entrySaving ? '処理中…' : entryDialogSubmitLabel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteSaving) {
+            setDeleteTarget(null)
+            setDeleteError(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>削除しますか？</DialogTitle>
+            <DialogDescription>
+              「{deleteTarget?.path}」を削除します。
+              {deleteTarget?.type === 'directory'
+                ? 'フォルダの中身もすべて削除され、元に戻せません。'
+                : '元に戻せません。'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <p className="text-destructive text-xs break-words">{deleteError}</p>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteTarget(null)
+                setDeleteError(null)
+              }}
+              disabled={deleteSaving}
+            >
+              キャンセル
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void submitDelete()}
+              disabled={deleteSaving}
+            >
+              {deleteSaving ? '削除中…' : '削除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {contextMenu && (
         <div
           ref={contextMenuRef}
           role="menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}
-          className="bg-popover text-popover-foreground fixed z-50 min-w-44 rounded-md border p-1 shadow-md"
+          className="bg-popover text-popover-foreground fixed z-50 min-w-48 rounded-md border p-1 shadow-md"
         >
           <p className="text-muted-foreground truncate px-2 py-1 font-mono text-[10px]">
             {contextMenu.entry.name}
           </p>
+          <button
+            type="button"
+            role="menuitem"
+            className="hover:bg-muted flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs"
+            onClick={() => openEntryDialog('create-file', contextMenu.entry)}
+          >
+            <FilePlus className="size-3.5 shrink-0" />
+            新規ファイル
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="hover:bg-muted flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs"
+            onClick={() => openEntryDialog('create-directory', contextMenu.entry)}
+          >
+            <FolderPlus className="size-3.5 shrink-0" />
+            新規フォルダ
+          </button>
+          <div className="bg-border my-1 h-px" />
           <button
             type="button"
             role="menuitem"
@@ -1285,6 +1687,25 @@ export default function SessionScreen() {
           >
             <Copy className="size-3.5 shrink-0" />
             パスをコピー
+          </button>
+          <div className="bg-border my-1 h-px" />
+          <button
+            type="button"
+            role="menuitem"
+            className="hover:bg-muted flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs"
+            onClick={() => openEntryDialog('rename', contextMenu.entry)}
+          >
+            <Pencil className="size-3.5 shrink-0" />
+            名前を変更
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="hover:bg-destructive/10 text-destructive flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs"
+            onClick={() => openDeleteDialog(contextMenu.entry)}
+          >
+            <Trash2 className="size-3.5 shrink-0" />
+            削除
           </button>
         </div>
       )}
@@ -1743,8 +2164,8 @@ function FileTree({
               onContextMenu={(event) => {
                 event.preventDefault()
                 onContextMenu(entry, {
-                  x: Math.min(event.clientX, window.innerWidth - 220),
-                  y: Math.min(event.clientY, window.innerHeight - 90),
+                  x: Math.min(event.clientX, window.innerWidth - 240),
+                  y: Math.min(event.clientY, window.innerHeight - 300),
                 })
               }}
               className={cn(
@@ -2982,6 +3403,11 @@ function statusClass(status: string): string {
 
 function basename(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
+}
+
+function parentPath(path: string): string {
+  const index = path.lastIndexOf('/')
+  return index === -1 ? '' : path.slice(0, index)
 }
 
 function errorMessage(error: unknown): string {
