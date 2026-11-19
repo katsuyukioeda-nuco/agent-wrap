@@ -44,6 +44,7 @@ import type {
   GitChangedFile,
   GitRepoSummary,
   SessionDetailResponse,
+  WorkspaceAllFilesResponse,
   WorkspaceDiffResponse,
   WorkspaceEntry,
   WorkspaceFileResponse,
@@ -69,6 +70,7 @@ import { appTypeLabels } from '@/lib/app'
 import { cn } from '@/lib/utils'
 import type { CodeSelection } from '@/components/code-viewer'
 import ConnectScreen from './ConnectScreen'
+import CommandPalette from '@/components/command-palette'
 
 const CodeViewer = lazy(() => import('@/components/code-viewer'))
 
@@ -139,6 +141,14 @@ export default function SessionScreen() {
   >({})
   const [fileLoadingPath, setFileLoadingPath] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([])
+  const [workspaceFilesRoot, setWorkspaceFilesRoot] = useState<number | null>(
+    null,
+  )
+  const [filesLoading, setFilesLoading] = useState(false)
+  const [filesError, setFilesError] = useState<string | null>(null)
+  const [filesTruncated, setFilesTruncated] = useState(false)
 
   const [fileSelection, setFileSelection] = useState<CodeSelection | null>(null)
   const [diffSelection, setDiffSelection] = useState<DiffSelection | null>(null)
@@ -409,6 +419,70 @@ export default function SessionScreen() {
       cancelled = true
     }
   }, [activeFilePath, workspaceBase, rootIndex, fileCache])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
+        return
+      }
+
+      if (event.key.toLowerCase() !== 'p') {
+        return
+      }
+
+      if (commentOpen || entryDialog || deleteTarget) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      setPaletteOpen(true)
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [commentOpen, entryDialog, deleteTarget])
+
+  useEffect(() => {
+    if (!paletteOpen || !workspaceBase || workspaceFilesRoot === rootIndex) {
+      return
+    }
+
+    let cancelled = false
+    setWorkspaceFiles([])
+    setFilesLoading(true)
+    setFilesError(null)
+
+    api<WorkspaceAllFilesResponse>(
+      `${workspaceBase}/all-files?root=${rootIndex}`,
+    )
+      .then((result) => {
+        if (cancelled) {
+          return
+        }
+
+        setWorkspaceFiles(result.files)
+        setFilesTruncated(result.truncated)
+        setWorkspaceFilesRoot(rootIndex)
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) {
+          setFilesError(errorMessage(loadError))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setFilesLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [paletteOpen, workspaceBase, rootIndex, workspaceFilesRoot])
 
   const selection =
     activeTab?.kind === 'file'
@@ -1469,6 +1543,16 @@ export default function SessionScreen() {
           </button>
         </div>
       )}
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        files={workspaceFiles}
+        loading={filesLoading}
+        error={filesError}
+        truncated={filesTruncated}
+        onOpenFile={openFileTab}
+      />
 
       <Dialog
         open={commentOpen}

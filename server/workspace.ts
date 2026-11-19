@@ -27,6 +27,22 @@ const execFileAsync = promisify(execFile)
 const MAX_FILE_BYTES = 512 * 1024
 const MAX_DIFF_BYTES = 200 * 1024
 const MAX_CHANGED_FILES = 300
+const MAX_WORKSPACE_FILES = 10_000
+const MAX_WALK_DEPTH = 12
+const IGNORED_DIRECTORIES = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'out',
+  '.next',
+  '.turbo',
+  'coverage',
+  'target',
+  'vendor',
+  '.venv',
+  '__pycache__',
+])
 
 interface GitResult {
   ok: boolean
@@ -273,6 +289,93 @@ export async function listWorkspaceDirectory(
     path: toPosixPath(relative(root, directory)),
     entries,
   }
+}
+
+/**
+ * コマンドパレット用に、ワークスペース内のファイルを一覧する。
+ * Git リポジトリでは tracked + untracked（ignore 対象外）を使い、
+ * それ以外は上限付きでディレクトリを走査する。
+ */
+export async function listWorkspaceFiles(
+  root: string,
+): Promise<{ files: string[]; truncated: boolean }> {
+  const repo = await runGit(root, ['rev-parse', '--is-inside-work-tree'])
+
+  if (repo.ok && repo.stdout.trim() === 'true') {
+    const [listed, deleted] = await Promise.all([
+      runGit(root, [
+        'ls-files',
+        '-z',
+        '--cached',
+        '--others',
+        '--exclude-standard',
+      ]),
+      runGit(root, ['ls-files', '-z', '--deleted']),
+    ])
+
+    if (listed.ok) {
+      const deletedPaths = new Set(deleted.stdout.split('\0').filter(Boolean))
+      const files = [
+        ...new Set(listed.stdout.split('\0').filter(Boolean)),
+      ].filter((path) => !deletedPaths.has(path))
+
+      files.sort((a, b) => a.localeCompare(b))
+
+      return {
+        files: files.slice(0, MAX_WORKSPACE_FILES),
+        truncated: files.length > MAX_WORKSPACE_FILES,
+      }
+    }
+  }
+
+  const files: string[] = []
+  let truncated = false
+
+  async function walk(directory: string, depth: number): Promise<void> {
+    if (files.length >= MAX_WORKSPACE_FILES) {
+      truncated = true
+      return
+    }
+
+    if (depth > MAX_WALK_DEPTH) {
+      truncated = true
+      return
+    }
+
+    let dirents
+    try {
+      dirents = await readdir(directory, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    for (const dirent of dirents) {
+      if (files.length >= MAX_WORKSPACE_FILES) {
+        truncated = true
+        return
+      }
+
+      if (dirent.name === '.git') {
+        continue
+      }
+
+      const absolute = join(directory, dirent.name)
+
+      if (dirent.isDirectory()) {
+        if (!IGNORED_DIRECTORIES.has(dirent.name)) {
+          await walk(absolute, depth + 1)
+        }
+        continue
+      }
+
+      files.push(toPosixPath(relative(root, absolute)))
+    }
+  }
+
+  await walk(root, 0)
+  files.sort((a, b) => a.localeCompare(b))
+
+  return { files, truncated }
 }
 
 /**

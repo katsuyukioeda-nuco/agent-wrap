@@ -107,6 +107,8 @@ schema.ts                   アプリケーションスキーマ
 - ファイルの内容または差分を選択すると、選択範囲の近くに「コメント」ポップアップを表示する
 - 「コメント」からダイアログを開き、コメントを保存する（会話へは送信しない）
 - 右側のアイコンレールからセッションのコメント一覧を開ける
+- Ctrl+P（macOS は Cmd+P）でコマンドパレットを開き、ワークスペース内のファイルを検索して開ける
+  - ↑↓ で移動、Enter で開く、Esc で閉じる
 - 左にファイルツリーと Git 差分を縦積み、右にタブ式のビューアを置く
 - ファイルの内容と差分は右側のタブで切り替える
 - ファイルツリーの項目を右クリックするとコンテキストメニューを表示する
@@ -122,6 +124,8 @@ schema.ts                   アプリケーションスキーマ
 - `GET /api/apps/:id/sessions/:sessionId/workspace` — ルート一覧
 - `GET /api/apps/:id/sessions/:sessionId/workspace/files?root=0&path=` — ディレクトリ一覧
 - `GET /api/apps/:id/sessions/:sessionId/workspace/file?root=0&path=` — ファイル内容
+- `GET /api/apps/:id/sessions/:sessionId/workspace/all-files?root=0` — コマンドパレット用のファイル一覧
+  - Git リポジトリでは tracked + untracked（ignore 対象外）、非 Git は上限付きで走査する
 - `GET /api/apps/:id/sessions/:sessionId/workspace/diff?root=0` — Git 差分
 - `POST /api/apps/:id/sessions/:sessionId/workspace/reveal` — OS のファイルマネージャーで表示
   - body: `{ "root": 0, "path": "src/App.tsx" }`

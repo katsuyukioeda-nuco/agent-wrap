@@ -133,6 +133,13 @@ export interface WorkspaceFilesResponse {
   entries: WorkspaceEntry[]
 }
 
+export interface WorkspaceAllFilesResponse {
+  /** ワークスペースルートからの相対パス。 */
+  files: string[]
+  /** 上限を超えて一部だけ返した場合 true。 */
+  truncated: boolean
+}
+
 export interface WorkspaceFileResponse {
   path: string
   size: number

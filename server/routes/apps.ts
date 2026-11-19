@@ -24,6 +24,7 @@ import {
   createWorkspaceEntry,
   deleteWorkspaceEntry,
   listWorkspaceDirectory,
+  listWorkspaceFiles,
   readWorkspaceFile,
   renameWorkspaceEntry,
   resolveWorkspaceRoots,
@@ -659,6 +660,35 @@ apps.get('/:id/sessions/:sessionId/workspace/files', async (c) => {
       c.req.query('path') ?? '',
     )
     return c.json(result)
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 400)
+  }
+})
+
+apps.get('/:id/sessions/:sessionId/workspace/all-files', async (c) => {
+  const detail = await getAppDetail(c.req.param('id'))
+  if (!detail) {
+    return c.json({ error: 'Connected app not found' }, 404)
+  }
+
+  if (detail.app.appType === 'claude') {
+    return c.json({ error: 'Claude Code ではワークスペースに対応していません' }, 400)
+  }
+
+  let roots
+  try {
+    roots = await resolveWorkspaceRoots(detail, c.req.param('sessionId'))
+  } catch (error) {
+    return c.json({ error: errorMessage(error) }, 502)
+  }
+
+  const root = selectRoot(roots, c.req.query('root'))
+  if (!root) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    return c.json(await listWorkspaceFiles(root.path))
   } catch (error) {
     return c.json({ error: errorMessage(error) }, 400)
   }
