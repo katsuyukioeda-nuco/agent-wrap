@@ -35,16 +35,23 @@ MCP サーバー: ${url}
 - MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。
 - MCP ツール connect_codex_app_server に、使用する Codex AppServer の URL を渡してください。`
       : detail.app.appType === 'claude'
-        ? `${claudeBinary} mcp add --transport http agent-wrap ${url}`
+        ? `このアプリに接続してください。
+
+MCP サーバー: ${url}
+
+- Claude Code の場合は、次のコマンドで MCP サーバーを追加してください。
+  ${claudeBinary} mcp add --transport http agent-wrap ${url}
+- Claude Desktop の場合は、MCP サーバーの設定に上記 URL を追加してください。
+- すでに追加済みならスキップしてください。`
         : `${detail.opencode?.binary ?? 'opencode'} serve --service`
 
   const codeLabel =
-    detail.app.appType === 'codex' ? 'プロンプト' : 'コマンド'
+    detail.app.appType === 'opencode' ? 'コマンド' : 'プロンプト'
   const stepTitle =
     detail.app.appType === 'codex'
       ? '以下のプロンプトをCodexに貼り付けます'
       : detail.app.appType === 'claude'
-        ? '以下のコマンドでClaude CodeにMCPサーバーを接続します'
+        ? '以下のプロンプトをClaudeに貼り付けます'
         : '以下のコマンドでOpenCodeを起動します'
 
   async function handleCopy(): Promise<void> {
@@ -87,12 +94,6 @@ MCP サーバー: ${url}
               {prompt}
             </pre>
           </div>
-          {isClaude && (
-            <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
-              未ログインの場合は、先に <code>claude auth login</code>{' '}
-              を実行してください。
-            </p>
-          )}
         </Step>
 
         <Step
