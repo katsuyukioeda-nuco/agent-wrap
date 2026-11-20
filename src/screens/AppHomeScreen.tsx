@@ -344,40 +344,43 @@ export default function AppHomeScreen() {
           </section>
         )}
 
-      <section className="bg-background relative flex h-[55vh] max-h-[44rem] min-h-[24rem] w-full flex-col overflow-hidden rounded-xl border border-dashed">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold tracking-tight">
-              プロジェクトごとの会話
-            </h2>
-            {!projectsLoading && (
-              <span className="text-muted-foreground text-[11px]">
-                {projects.length}
-              </span>
-            )}
-          </div>
+      {detail.app.appType !== 'claude' && (
+        <section className="bg-background relative flex h-[55vh] max-h-[44rem] min-h-[24rem] w-full flex-col overflow-hidden rounded-xl border border-dashed">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold tracking-tight">
+                プロジェクトごとの会話
+              </h2>
+              {!projectsLoading && (
+                <span className="text-muted-foreground text-[11px]">
+                  {projects.length}
+                </span>
+              )}
+            </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0"
-            aria-label="プロジェクトを更新"
-            title="更新"
-            onClick={refresh}
-            disabled={busy || !supported}
-          >
-            <RefreshCw className={cn('size-3.5', busy && 'animate-spin')} />
-          </Button>
-        </header>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              aria-label="プロジェクトを更新"
+              title="更新"
+              onClick={refresh}
+              disabled={busy || !supported}
+            >
+              <RefreshCw
+                className={cn('size-3.5', busy && 'animate-spin')}
+              />
+            </Button>
+          </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-        {!supported ? (
-          <PaneMessage
-            icon={<Folder />}
-            title="プロジェクトを表示できません"
-            description="Claude Code の Connected App ではプロジェクト一覧に対応していません。"
-          />
-        ) : projectsLoading ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {!supported ? (
+              <PaneMessage
+                icon={<Folder />}
+                title="プロジェクトを表示できません"
+                description="Claude Code の Connected App ではプロジェクト一覧に対応していません。"
+              />
+            ) : projectsLoading ? (
           <PaneSpinner />
         ) : projectsError ? (
           detail.app.appType === 'codex' && /AppServer/i.test(projectsError) ? (
@@ -552,6 +555,7 @@ export default function AppHomeScreen() {
         )}
         </div>
       </section>
+      )}
     </div>
   )
 }
