@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Check, Copy, Loader2 } from 'lucide-react'
-import type { ConnectedAppDetail } from '../../shared/agents'
+import type { ConnectedAppDetail, ConnectionStatus } from '../../shared/agents'
 import { Button } from '@/components/ui/button'
 import { appTypeLabels, mcpUrl } from '@/lib/app'
 import { cn } from '@/lib/utils'
@@ -9,13 +9,20 @@ type StepState = 'done' | 'active' | 'pending'
 
 export default function ConnectScreen({
   detail,
+  status,
+  onRefresh,
 }: {
   detail: ConnectedAppDetail
+  status?: ConnectionStatus | null
+  onRefresh?: () => void
 }) {
   const [copied, setCopied] = useState(false)
 
   const url = mcpUrl(window.location.origin, detail.app.id)
   const appTypeLabel = appTypeLabels[detail.app.appType]
+  const isClaude = detail.app.appType === 'claude'
+  const claudeMissing = isClaude && status?.installed === false
+  const claudeBinary = detail.claude?.binary ?? 'claude'
 
   const prompt =
     detail.app.appType === 'codex'
@@ -28,7 +35,7 @@ MCP サーバー: ${url}
 - MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。
 - MCP ツール connect_codex_app_server に、使用する Codex AppServer の URL を渡してください。`
       : detail.app.appType === 'claude'
-        ? `${detail.claude?.binary ?? 'claude'} auth login`
+        ? `${claudeBinary} mcp add --transport http agent-wrap ${url}`
         : `${detail.opencode?.binary ?? 'opencode'} serve --service`
 
   const codeLabel =
@@ -37,7 +44,7 @@ MCP サーバー: ${url}
     detail.app.appType === 'codex'
       ? '以下のプロンプトをCodexに貼り付けます'
       : detail.app.appType === 'claude'
-        ? '以下のコマンドでClaude Codeにログインします'
+        ? '以下のコマンドでClaude CodeにMCPサーバーを接続します'
         : '以下のコマンドでOpenCodeを起動します'
 
   async function handleCopy(): Promise<void> {
@@ -54,6 +61,12 @@ MCP サーバー: ${url}
       <h1 className="text-lg font-semibold tracking-tight">
         以下の手順で{appTypeLabel}に接続します。
       </h1>
+
+      {claudeMissing && (
+        <p className="border-destructive/40 text-destructive mt-3 rounded-md border px-3 py-2 text-xs leading-relaxed">
+          Claude Code の実行ファイルが見つかりません。インストールしてから、この画面を再読み込みしてください。
+        </p>
+      )}
 
       <div className="mt-6">
         <Step
@@ -74,6 +87,12 @@ MCP サーバー: ${url}
               {prompt}
             </pre>
           </div>
+          {isClaude && (
+            <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
+              未ログインの場合は、先に <code>claude auth login</code>{' '}
+              を実行してください。
+            </p>
+          )}
         </Step>
 
         <Step
@@ -82,7 +101,25 @@ MCP サーバー: ${url}
           title="接続を待つ"
           state={copied ? 'active' : 'pending'}
         >
-          {copied && <Waiting />}
+          {copied && (
+            <div className="space-y-2">
+              {claudeMissing ? (
+                <p className="text-muted-foreground text-sm">
+                  Claude Code が見つからないため、接続状態を確認できません。
+                </p>
+              ) : (
+                <Waiting label="接続を待っています…" />
+              )}
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                接続できると自動で進みます。反映されない場合は再確認してください。
+              </p>
+              {onRefresh && (
+                <Button variant="outline" size="sm" onClick={onRefresh}>
+                  再確認
+                </Button>
+              )}
+            </div>
+          )}
         </Step>
       </div>
     </div>
@@ -133,11 +170,11 @@ function Step({
   )
 }
 
-function Waiting() {
+function Waiting({ label }: { label: string }) {
   return (
     <div className="text-muted-foreground flex items-center gap-2 text-sm">
       <Loader2 className="size-4 animate-spin" />
-      接続を待っています…
+      {label}
     </div>
   )
 }

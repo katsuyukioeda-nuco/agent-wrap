@@ -60,6 +60,7 @@ export async function getConnectionStatus(
       connected: auth.loggedIn,
       appType: 'claude',
       url: null,
+      installed: auth.installed,
     }
   }
 

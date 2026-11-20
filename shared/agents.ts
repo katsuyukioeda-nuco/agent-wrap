@@ -44,6 +44,8 @@ export interface ConnectionStatus {
   connected: boolean
   appType: AppType
   url?: string | null
+  /** Claude Code の実行ファイルが見つかっているか。 */
+  installed?: boolean
 }
 
 /** エージェント側に登録されているプロジェクト。 */

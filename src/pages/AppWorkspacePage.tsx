@@ -262,7 +262,11 @@ export default function AppWorkspacePage() {
             {connection?.connected ? (
               <Outlet context={{ detail, refresh: load }} />
             ) : (
-              <ConnectScreen detail={detail} />
+              <ConnectScreen
+                detail={detail}
+                status={connection}
+                onRefresh={() => void load()}
+              />
             )}
           </main>
         </div>
