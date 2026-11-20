@@ -22,7 +22,6 @@ export default function ConnectScreen({
   const appTypeLabel = appTypeLabels[detail.app.appType]
   const isClaude = detail.app.appType === 'claude'
   const claudeMissing = isClaude && status?.installed === false
-  const claudeBinary = detail.claude?.binary ?? 'claude'
 
   const prompt =
     detail.app.appType === 'codex'
@@ -39,10 +38,7 @@ MCP サーバー: ${url}
 
 MCP サーバー: ${url}
 
-- Claude Code の場合は、次のコマンドで MCP サーバーを追加してください。
-  ${claudeBinary} mcp add --transport http agent-wrap ${url}
-- Claude Desktop の場合は、MCP サーバーの設定に上記 URL を追加してください。
-- すでに追加済みならスキップしてください。`
+- MCP サーバーをまだ追加していない場合だけ追加してください。追加済みならスキップしてください。`
         : `${detail.opencode?.binary ?? 'opencode'} serve --service`
 
   const codeLabel =
