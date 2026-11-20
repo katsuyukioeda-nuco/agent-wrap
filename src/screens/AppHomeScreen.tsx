@@ -31,7 +31,7 @@ import { useApp } from '@/hooks/use-app'
 import { api } from '@/lib/api'
 import { mcpUrl } from '@/lib/app'
 import { cn } from '@/lib/utils'
-import ConnectScreen from './ConnectScreen'
+import CodexOfflineScreen from './CodexOfflineScreen'
 
 interface SessionState {
   sessions: SessionSummary[]
@@ -381,7 +381,11 @@ export default function AppHomeScreen() {
           <PaneSpinner />
         ) : projectsError ? (
           detail.app.appType === 'codex' && /AppServer/i.test(projectsError) ? (
-            <ConnectScreen detail={detail} />
+            <CodexOfflineScreen
+              detail={detail}
+              url={detail.codex?.appServerUrl ?? null}
+              onRetry={refresh}
+            />
           ) : (
             <PaneMessage
               icon={<Folder />}

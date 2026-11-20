@@ -361,7 +361,10 @@ MCP の Prompt（`registerPrompt`）は使いません。Codex が MCP プロン
 - 接続に成功すると `codex_connected_apps.app_server_url` に保存される
 - `GET /api/apps/:id/connection` は URL の有無だけでなく、TCP で到達できるかも確認する
 - AppServer に到達できない場合は、トップ画面・セッション画面とも
-  「読み込めませんでした」ではなく接続手順（`ConnectScreen`）を表示する
+  「読み込めませんでした」ではなく接続状態の画面を表示する
+  - まだ一度も接続していない（URL がない）場合は接続手順 `ConnectScreen`
+  - 一度接続した URL がある場合は `CodexOfflineScreen`
+    - 会話や設定は消えていないことを明示し、再試行と接続手順の表示を出す
 
 ### OpenCode
 

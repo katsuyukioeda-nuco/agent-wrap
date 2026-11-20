@@ -22,6 +22,7 @@ import {
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import ConnectScreen from '@/screens/ConnectScreen'
+import CodexOfflineScreen from '@/screens/CodexOfflineScreen'
 
 const addChoices: Array<{
   appType: AppType
@@ -261,6 +262,12 @@ export default function AppWorkspacePage() {
 
             {connection?.connected ? (
               <Outlet context={{ detail, refresh: load }} />
+            ) : connection?.appType === 'codex' && connection.url ? (
+              <CodexOfflineScreen
+                detail={detail}
+                url={connection.url}
+                onRetry={() => void load()}
+              />
             ) : (
               <ConnectScreen
                 detail={detail}

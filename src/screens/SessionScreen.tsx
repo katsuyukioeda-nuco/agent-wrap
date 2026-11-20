@@ -69,7 +69,7 @@ import { api } from '@/lib/api'
 import { appTypeLabels } from '@/lib/app'
 import { cn } from '@/lib/utils'
 import type { CodeSelection } from '@/components/code-viewer'
-import ConnectScreen from './ConnectScreen'
+import CodexOfflineScreen from './CodexOfflineScreen'
 import CommandPalette from '@/components/command-palette'
 
 const CodeViewer = lazy(() => import('@/components/code-viewer'))
@@ -1231,7 +1231,13 @@ export default function SessionScreen() {
       error &&
       /AppServer/i.test(error)
     ) {
-      return <ConnectScreen detail={detail} />
+      return (
+        <CodexOfflineScreen
+          detail={detail}
+          url={detail.codex?.appServerUrl ?? null}
+          onRetry={() => window.location.reload()}
+        />
+      )
     }
 
     return (
