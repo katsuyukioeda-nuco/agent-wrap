@@ -364,7 +364,9 @@ MCP の Prompt（`registerPrompt`）は使いません。Codex が MCP プロン
   「読み込めませんでした」ではなく接続状態の画面を表示する
   - まだ一度も接続していない（URL がない）場合は接続手順 `ConnectScreen`
   - 一度接続した URL がある場合は `CodexOfflineScreen`
-    - 会話や設定は消えていないことを明示し、再試行と接続手順の表示を出す
+    - 会話や設定は消えていないことを明示し、保存済み URL から
+      `codex app-server --listen <url>` の起動コマンドを表示する
+    - 再試行ボタンを出す（MCP の設定案内は出さない）
 
 ### OpenCode
 

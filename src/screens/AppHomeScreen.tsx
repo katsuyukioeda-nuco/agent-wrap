@@ -382,7 +382,6 @@ export default function AppHomeScreen() {
         ) : projectsError ? (
           detail.app.appType === 'codex' && /AppServer/i.test(projectsError) ? (
             <CodexOfflineScreen
-              detail={detail}
               url={detail.codex?.appServerUrl ?? null}
               onRetry={refresh}
             />

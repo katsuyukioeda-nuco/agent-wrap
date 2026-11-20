@@ -1233,7 +1233,6 @@ export default function SessionScreen() {
     ) {
       return (
         <CodexOfflineScreen
-          detail={detail}
           url={detail.codex?.appServerUrl ?? null}
           onRetry={() => window.location.reload()}
         />

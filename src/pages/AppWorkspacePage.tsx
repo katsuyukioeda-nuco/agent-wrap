@@ -264,7 +264,6 @@ export default function AppWorkspacePage() {
               <Outlet context={{ detail, refresh: load }} />
             ) : connection?.appType === 'codex' && connection.url ? (
               <CodexOfflineScreen
-                detail={detail}
                 url={connection.url}
                 onRetry={() => void load()}
               />
