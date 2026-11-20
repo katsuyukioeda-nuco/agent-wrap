@@ -261,6 +261,10 @@ server.registerTool(
 
 - Codex: `_meta["x-codex-turn-metadata"]` の `thread_id` / `turn_id` / `model` / `codex_version`
 - OpenCode: `_meta["ai.opencode/sessionID"]`
+- Claude: `_meta` が無いため `sessionId` 引数が必須
+  （Claude Code の `CLAUDE_CODE_SESSION_ID` を渡す）
+- Codex / OpenCode も `sessionId` を任意で受け取れるが、
+  `_meta` から取れる場合はそちらを優先する
 
 ```
 {mcpOrigin()}/{appId}/sessions/{sessionId}

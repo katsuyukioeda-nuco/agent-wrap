@@ -71,6 +71,114 @@ function missingSessionResult() {
 }
 
 /**
+ * 呼び出し元セッションの URL を返す。
+ * Codex / OpenCode は MCP のメタ情報を優先し、無い場合だけ引数の sessionId を使う。
+ * Claude はメタ情報が無いため sessionId を必須にする。
+ */
+function registerReflectTool(
+  server: McpServer,
+  detail: ConnectedAppDetail,
+  requireExplicitSession: boolean,
+): void {
+  const sessionIdSchema = z.string().min(1).max(255)
+
+  server.registerTool(
+    'reflect',
+    {
+      title: 'Reflect current session',
+      description: requireExplicitSession
+        ? '自分のセッション ID を渡すと、agent-wrap のセッション画面 URL を返す。Claude Code では CLAUDE_CODE_SESSION_ID を使う。'
+        : '現在のセッション（自分自身）の情報と、agent-wrap のセッション画面 URL を返す。MCP のメタ情報が無い場合だけ sessionId を指定する。',
+      inputSchema: requireExplicitSession
+        ? {
+            sessionId: sessionIdSchema.describe(
+              '自分のセッション ID（Claude Code の CLAUDE_CODE_SESSION_ID）',
+            ),
+          }
+        : {
+            sessionId: sessionIdSchema
+              .optional()
+              .describe(
+                'MCP のメタ情報からセッションを特定できない場合に使う ID',
+              ),
+          },
+    },
+    async (
+      { sessionId: explicitSessionId }: { sessionId?: string },
+      extra: { _meta?: Record<string, unknown> },
+    ) => {
+      const meta = extra._meta
+      const turn = asRecord(meta?.['x-codex-turn-metadata'])
+      const codexThreadId = codexThreadIdFromMeta(meta)
+      const opencodeSessionId = opencodeSessionIdFromMeta(meta)
+      const sessionId =
+        codexThreadId ?? opencodeSessionId ?? explicitSessionId
+
+      if (!sessionId) {
+        return requireExplicitSession
+          ? {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify(
+                    {
+                      supported: false,
+                      reason:
+                        'sessionId が必要です。Claude Code のセッション ID を渡してください。',
+                    },
+                    null,
+                    2,
+                  ),
+                },
+              ],
+            }
+          : missingSessionResult()
+      }
+
+      const url = `${mcpOrigin()}/${detail.app.id}/sessions/${encodeURIComponent(sessionId)}`
+      const source = codexThreadId
+        ? 'codex'
+        : opencodeSessionId
+          ? 'opencode'
+          : detail.app.appType
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                source,
+                app: {
+                  id: detail.app.id,
+                  appType: detail.app.appType,
+                },
+                session: codexThreadId
+                  ? {
+                      id: codexThreadId,
+                      url,
+                      threadId: codexThreadId,
+                      turnId: stringValue(turn?.turn_id),
+                      model: stringValue(turn?.model),
+                      codexVersion: stringValue(turn?.codex_version),
+                    }
+                  : {
+                      id: sessionId,
+                      url,
+                      sessionId,
+                    },
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      }
+    },
+  )
+}
+
+/**
  * Connected App ごとに公開する MCP ツール。
  *
  * ここにアプリ固有のツールを追加していく。`detail.app.id` を使って
@@ -105,81 +213,9 @@ export function registerAppTools(server: McpServer, detail: ConnectedAppDetail):
   // 例:
   // server.registerTool('my_tool', { inputSchema: { value: z.string() } }, async ({ value }) => ({ ... }))
 
+  registerReflectTool(server, detail, detail.app.appType === 'claude')
+
   if (detail.app.appType === 'codex' || detail.app.appType === 'opencode') {
-    server.registerTool(
-      'reflect',
-      {
-        title: 'Reflect current session',
-        description:
-          '現在のセッション（自分自身）の情報と、agent-wrap のセッション画面 URL を返す。',
-        inputSchema: {},
-      },
-      async (_args, extra) => {
-        const meta = extra._meta
-        const turn = asRecord(meta?.['x-codex-turn-metadata'])
-
-        const codexThreadId = codexThreadIdFromMeta(meta)
-        const opencodeSessionId = opencodeSessionIdFromMeta(meta)
-
-        const sessionId = codexThreadId ?? opencodeSessionId
-
-        if (!sessionId) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    supported: false,
-                    reason:
-                      'セッション情報（x-codex-turn-metadata または ai.opencode/sessionID）がありません。',
-                  },
-                  null,
-                  2,
-                ),
-              },
-            ],
-          }
-        }
-
-        const url = `${mcpOrigin()}/${detail.app.id}/sessions/${encodeURIComponent(sessionId)}`
-        const source = codexThreadId ? 'codex' : 'opencode'
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  source,
-                  app: {
-                    id: detail.app.id,
-                    appType: detail.app.appType,
-                  },
-                  session: codexThreadId
-                    ? {
-                        id: codexThreadId,
-                        url,
-                        threadId: codexThreadId,
-                        turnId: stringValue(turn?.turn_id),
-                        model: stringValue(turn?.model),
-                        codexVersion: stringValue(turn?.codex_version),
-                      }
-                    : {
-                        id: opencodeSessionId,
-                        url,
-                        sessionId: opencodeSessionId,
-                      },
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        }
-      },
-    )
-
     server.registerTool(
       'list_comments',
       {
