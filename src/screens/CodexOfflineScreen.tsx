@@ -37,8 +37,7 @@ export default function CodexOfflineScreen({
         </h1>
 
         <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-          接続が切れているだけで、会話や設定が消えたわけではありません。
-          次のコマンドで AppServer を起動すると、自動で再接続します。
+          次のコマンドで AppServer を起動してください。
         </p>
 
         <div className="bg-muted mt-3 overflow-hidden rounded-md border">
@@ -53,10 +52,6 @@ export default function CodexOfflineScreen({
             {command}
           </pre>
         </div>
-
-        <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
-          会話一覧は AppServer から取得するため、接続できるまで表示できません。
-        </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={onRetry}>
