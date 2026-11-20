@@ -21,10 +21,12 @@ function probeAppServer(url: string, timeoutMs = 1200): Promise<boolean> {
 
   const port =
     Number(parsed.port) || (parsed.protocol === 'wss:' ? 443 : 80)
+  // IPv6 の hostname は "[::1]" のように角括弧付きで返るため外す。
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, '')
 
   return new Promise((resolve) => {
     let settled = false
-    const socket = connect({ host: parsed.hostname, port })
+    const socket = connect({ host: hostname, port })
 
     const done = (ok: boolean) => {
       if (settled) {
